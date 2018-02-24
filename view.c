@@ -27,27 +27,52 @@ void print_volume(struct S_SFS_VOL_ID *volume) {
     printf("    name: %s\n", volume->name);
 }
 
+void print_dir_entry(struct S_SFS_DIR *dir) {
+    printf("dir:\n");
+    printf("    type: %02x\n", dir->type);
+    printf("    crc: %02x\n", dir->crc);
+    printf("    num_cont: %d\n", dir->num_cont);
+    printf("    time_stamp: %" PRIx64 "\n", dir->time_stamp);
+    printf("    name: %s\n", dir->name);
+}
+
+void print_file_entry(struct S_SFS_FILE *file) {
+    printf("file:\n");
+    printf("    type: %02x\n", file->type);
+    printf("    crc: %02x\n", file->crc);
+    printf("    num_cont: %d\n", file->num_cont);
+    printf("    time_stamp: %" PRIx64 "\n", file->time_stamp);
+    printf("    start_block: %" PRIx64 "\n", file->start_block);
+    printf("    end_block: %" PRIx64 "\n", file->end_block);
+    printf("    file_len: %" PRIx64 "\n", file->file_len);
+    printf("    name: %s\n", file->name);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "usage: %s <image file name>\n", argv[0]);
         return 1;
     }
 
-    FILE *f = fopen(argv[1], "r");
-    if (f == NULL) {
-        fprintf(stderr, "file error\n");
-        return 2;
-    }
-    
-
-    struct S_SFS_SUPER *super = get_super(f);
+    struct sfs *sfs = sfs_make(argv[1]);
+    struct S_SFS_SUPER *super = sfs_get_super(sfs);
     print_super(super);
 
-    struct S_SFS_VOL_ID *volume = get_volume(f);
+    struct S_SFS_VOL_ID *volume = sfs_get_volume(sfs);
     print_volume(volume);
 
+    struct sfs_entry_list *list = sfs_get_entry_list(sfs);
+    while (list != NULL) {
+        if (list->type == SFS_ENTRY_FILE) {
+            print_file_entry(list->entry.file);
+        } else if (list->type == SFS_ENTRY_DIR) {
+            print_dir_entry(list->entry.dir);
+        } else {
+//            printf("<entry of type 0x%02x>\n", list->type);
+        }
+        list = list->next;
+    }
     /* TODO: enter prompt: list all, view file ... */
-    free(super);
-    free(volume);
+    sfs_terminate(sfs);
     return 0;
 }
