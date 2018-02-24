@@ -158,7 +158,6 @@ struct S_SFS_DIR *make_dir_entry(uint8_t *buf, FILE *f) {
 struct S_SFS_FILE *make_file_entry(uint8_t *buf, FILE *f) {
     struct S_SFS_FILE *f_entry = malloc(sizeof(struct S_SFS_FILE));
     uint8_t *cbuf = buf;
-
     memcpy(&f_entry->type, cbuf, sizeof(f_entry->type));
     cbuf += sizeof(f_entry->type);
     memcpy(&f_entry->crc, cbuf, sizeof(f_entry->crc));
@@ -169,10 +168,10 @@ struct S_SFS_FILE *make_file_entry(uint8_t *buf, FILE *f) {
     cbuf += sizeof(f_entry->time_stamp);
     memcpy(&f_entry->start_block, cbuf, sizeof(f_entry->start_block));
     cbuf += sizeof(f_entry->start_block);
-    memcpy(&f_entry->file_len, cbuf, sizeof(f_entry->file_len));
-    cbuf += sizeof(f_entry->file_len);
     memcpy(&f_entry->end_block, cbuf, sizeof(f_entry->end_block));
     cbuf += sizeof(f_entry->end_block);
+    memcpy(&f_entry->file_len, cbuf, sizeof(f_entry->file_len));
+    cbuf += sizeof(f_entry->file_len);
     f_entry->name = rw_cont_name(FILE_NAME_LEN, cbuf, f, f_entry->num_cont);
     if (!check_crc(buf, 64 * (1 + f_entry->num_cont))) {
         return NULL;
@@ -233,8 +232,10 @@ struct S_SFS_FILE_DEL *make_file_del_entry(uint8_t *buf, FILE *f) {
     cbuf += sizeof(f_entry->start_block);
     memcpy(&f_entry->end_block, cbuf, sizeof(f_entry->end_block));
     cbuf += sizeof(f_entry->end_block);
+    memcpy(&f_entry->file_len, cbuf, sizeof(f_entry->file_len));
+    cbuf += sizeof(f_entry->file_len);
     f_entry->name = rw_cont_name(FILE_NAME_LEN, cbuf, f, f_entry->num_cont);
-    if (!check_crc(buf, 64)) {
+    if (!check_crc(buf, 64 * (1 + f_entry->num_cont))) {
         return NULL;
     }    
     return f_entry;    
