@@ -61,6 +61,21 @@ void print_file_entry(struct S_SFS_FILE *file) {
     printf("\n");
 }
 
+int loop(struct sfs *sfs) {
+    int cont;
+    printf(">");
+    char *buf = NULL;
+    size_t buflen = 0;
+    if (getline(&buf, &buflen, stdin) > 1) {
+        printf("line=%s", buf);
+        cont = 1;
+    } else {
+        cont = 0;
+    }
+    free(buf);
+    return cont;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "usage: %s <image file name>\n", argv[0]);
@@ -76,16 +91,18 @@ int main(int argc, char **argv) {
 
     struct sfs_entry_list *list = sfs_get_entry_list(sfs);
     while (list != NULL) {
-        if (list->type == SFS_ENTRY_FILE) {
+        if (list->type == SFS_ENTRY_FILE)
             print_file_entry(list->entry.file);
-        } else if (list->type == SFS_ENTRY_DIR) {
+        else if (list->type == SFS_ENTRY_DIR)
             print_dir_entry(list->entry.dir);
-        } else {
-//            printf("<entry of type 0x%02x>\n", list->type);
-        }
+        else if (list->type != SFS_ENTRY_VOL_ID
+                && list->type != SFS_ENTRY_START)
+            printf("<entry of type 0x%02x>\n", list->type);
         list = list->next;
     }
-    /* TODO: enter prompt: list all, view file ... */
+    int is_loop = loop(sfs);
+    while (is_loop)
+        is_loop = loop(sfs);
     sfs_terminate(sfs);
     return 0;
 }
