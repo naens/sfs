@@ -29,7 +29,7 @@ void print_super(struct S_SFS_SUPER *super) {
     printf("    version: %02x\n", super->version);
     printf("    total_blocks: %" PRIx64 "\n", super->total_blocks);
     printf("    rsvd_blocks: %" PRIx32 "\n", super->rsvd_blocks);
-    printf("    block_size: %02x\n", super->block_size);
+    printf("    block_size: %d\n", 1 << (super->block_size + 7));
     printf("    crc: %02x\n", super->crc);
 }
 
