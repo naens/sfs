@@ -5,8 +5,8 @@ This is an attempt to implement the Simple File System.  This is an example
 application/package, so it's only limited to version 1.10.
 
 * Tasks
-** DONE Display files and directories with timestamps
-** TODO Read contents of a file
-** TODO Linux FUSE implementation
-** TODO Linux VFS implementation
-** TODO FreeDOS implementation
+ * DONE Display files and directories with timestamps
+ * TODO Read contents of a file
+ * TODO Linux FUSE implementation
+ * TODO Linux VFS implementation
+ * TODO FreeDOS implementation
