@@ -1,12 +1,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <time.h>
 
 #include "sfs.h"
 
+void print_time_stamp(int64_t time_stamp) {
+    time_t time = time_stamp >> 16;
+    struct tm tm;
+    if (gmtime_r(&time, &tm) == NULL) {
+        printf("<time error>");
+    } else {
+        printf("%04d-%02d-%02d %02d:%02d:%02d",
+             tm.tm_year + 1900, tm.tm_mon, tm.tm_mday,
+             tm.tm_hour, tm.tm_min, tm.tm_sec);
+    }
+}
+
 void print_super(struct S_SFS_SUPER *super) {
     printf("super:\n");
-    printf("    time_stamp: %" PRIx64 "\n", super->time_stamp);
+    printf("    time_stamp: ");
+    print_time_stamp(super->time_stamp);
+    printf("\n");
     printf("    data_size: %" PRIx64 "\n", super->data_size);
     printf("    index_size: %" PRIx64 "\n", super->index_size);
     printf("    magic: 0x%02x%02x%02x\n", super->magic[0],
@@ -23,29 +38,27 @@ void print_volume(struct S_SFS_VOL_ID *volume) {
     printf("    type: %02x\n", volume->type);
     printf("    crc: %02x\n", volume->crc);
     printf("    resvd: %04x\n", volume->resvd);
-    printf("    time_stamp: %" PRIx64 "\n", volume->time_stamp);
+    printf("    time_stamp: ");
+    print_time_stamp(volume->time_stamp);
+    printf("\n");
     printf("    name: %s\n", volume->name);
 }
 
 void print_dir_entry(struct S_SFS_DIR *dir) {
-    printf("dir:\n");
-    printf("    type: %02x\n", dir->type);
-    printf("    crc: %02x\n", dir->crc);
-    printf("    num_cont: %d\n", dir->num_cont);
-    printf("    time_stamp: %" PRIx64 "\n", dir->time_stamp);
-    printf("    name: %s\n", dir->name);
+    printf("dir:");
+    printf("%32s\t", dir->name);
+    print_time_stamp(dir->time_stamp);
+    printf("\n");
 }
 
 void print_file_entry(struct S_SFS_FILE *file) {
-    printf("file:\n");
-    printf("    type: %02x\n", file->type);
-    printf("    crc: %02x\n", file->crc);
-    printf("    num_cont: %d\n", file->num_cont);
-    printf("    time_stamp: %" PRIx64 "\n", file->time_stamp);
-    printf("    start_block: %" PRIx64 "\n", file->start_block);
-    printf("    end_block: %" PRIx64 "\n", file->end_block);
-    printf("    file_len: %" PRIx64 "\n", file->file_len);
-    printf("    name: %s\n", file->name);
+    printf("file:");
+    printf("%32s\t", file->name);
+    print_time_stamp(file->time_stamp);
+//    printf("\tblocks:[%" PRIx64 "..", file->start_block);
+//    printf("%" PRIx64 "]", file->end_block);
+    printf("\tsize: %" PRIx64 "", file->file_len);
+    printf("\n");
 }
 
 int main(int argc, char **argv) {
