@@ -7,6 +7,7 @@
 struct sfs *sfs_make(char *filename) {
     struct sfs *sfs = malloc(sizeof(struct sfs));
     sfs->super = NULL;
+    sfs->block_size = 0;
     sfs->entry_list = NULL;
     sfs->file = fopen(filename, "r");
     if (sfs->file == NULL) {
@@ -58,6 +59,7 @@ struct S_SFS_SUPER *sfs_get_super(struct sfs *sfs) {
     cbuf += sizeof(sfs->super->rsvd_blocks);
     memcpy(&sfs->super->block_size, cbuf, sizeof(sfs->super->block_size));
     cbuf += sizeof(sfs->super->block_size);
+    sfs->block_size = 1 << (sfs->super->block_size + 7);
     memcpy(&sfs->super->crc, cbuf, sizeof(sfs->super->crc));
 
     if (!check_crc(buf + m, 42 - m)) {

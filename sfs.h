@@ -16,6 +16,7 @@
 
 struct sfs {
     FILE *file;
+    int block_size;
     struct S_SFS_SUPER *super;
     struct sfs_entry_list *entry_list;
 };
