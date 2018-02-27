@@ -93,7 +93,10 @@ struct S_SFS_FILE {
     uint64_t start_block;
     uint64_t end_block;
     uint64_t file_len;
+    FILE *file;
+    char *file_buf;
     uint8_t *name;
+    struct sfs *sfs;
 };
 
 /* The Unusable Entry */
@@ -135,4 +138,10 @@ struct S_SFS_VOL_ID *sfs_get_volume(struct sfs *sfs);
 
 struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs);
 
+FILE* sfs_open_file(struct S_SFS_FILE *sfs_file);
+
+void sfs_close_file(struct S_SFS_FILE *sfs_file);
+
 void sfs_terminate(struct sfs *sfs);
+
+struct S_SFS_FILE *sfs_get_file_by_name(struct sfs *sfs, char *filename);

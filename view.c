@@ -61,13 +61,39 @@ void print_file_entry(struct S_SFS_FILE *file) {
     printf("\n");
 }
 
+/* compare command and return arguments */
+char *test_cmd_get_args(char *cmd, char *line) {
+    while (*cmd == *line) {
+        cmd++;
+        line++;
+    }
+    if (*line != ' ')
+        return NULL;
+    while (*line == ' ')
+        line++;
+    if (*line == '\n')
+        return NULL;
+    char *res = line;
+    while (*line != '\n')
+        line++;
+    *line = '\0';
+    return res;
+}
+
 int loop(struct sfs *sfs) {
     int cont;
     printf(">");
     char *buf = NULL;
     size_t buflen = 0;
+    
     if (getline(&buf, &buflen, stdin) > 1) {
         printf("line=%s", buf);
+        char *args;
+        if ((args = test_cmd_get_args("write", buf)) != NULL) {
+            printf("type: args=%s\n", args);
+            struct S_SFS_FILE *sfs_file = sfs_get_file_by_name(sfs, args);
+            sfs_open_file(sfs_file);
+        }
         cont = 1;
     } else {
         cont = 0;
