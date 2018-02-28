@@ -57,7 +57,7 @@ void print_file_entry(struct S_SFS_FILE *file) {
     print_time_stamp(file->time_stamp);
 //    printf("\tblocks:[%" PRIx64 "..", file->start_block);
 //    printf("%" PRIx64 "]", file->end_block);
-    printf("\tsize: %" PRIx64 "", file->file_len);
+    printf("\tsize: %ld", file->file_len);
     printf("\n");
 }
 
@@ -80,6 +80,40 @@ char *test_cmd_get_args(char *cmd, char *line) {
     return res;
 }
 
+void export_file(struct sfs *sfs, char *args) {
+    printf("export: args=%s\n", args);
+    struct S_SFS_FILE *sfs_file = sfs_get_file_by_name(sfs, args);
+    if (sfs_file == NULL) {
+        printf("file not found\n");
+        return;
+    }
+
+    char *buf = NULL;
+    size_t buflen = 0;
+    printf("export to: ");
+    if (getline(&buf, &buflen, stdin) <= 1) {
+        printf("export file name reading error\n");
+        return;
+    }
+    char *pc = buf;
+    while (*pc != '\n')
+        pc++;
+    *pc = 0;
+
+    sfs_open_file(sfs_file);
+    FILE *infile = sfs_file->file;
+    FILE *outfile = fopen(buf, "w");
+    if (outfile == NULL) {
+        printf("export file open error\n");
+        return;
+    }
+    char c[10];
+    while (fread(c, 1, 1, infile) == 1)
+        fwrite(c, 1, 1, outfile);
+    fclose(outfile);
+    fclose(infile);
+}
+
 int loop(struct sfs *sfs) {
     int cont;
     printf(">");
@@ -89,11 +123,8 @@ int loop(struct sfs *sfs) {
     if (getline(&buf, &buflen, stdin) > 1) {
         printf("line=%s", buf);
         char *args;
-        if ((args = test_cmd_get_args("write", buf)) != NULL) {
-            printf("type: args=%s\n", args);
-            struct S_SFS_FILE *sfs_file = sfs_get_file_by_name(sfs, args);
-            sfs_open_file(sfs_file);
-        }
+        if ((args = test_cmd_get_args("export", buf)) != NULL)
+            export_file(sfs, args);
         cont = 1;
     } else {
         cont = 0;
