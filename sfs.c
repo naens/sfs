@@ -347,12 +347,16 @@ void sfs_terminate(struct sfs *sfs) {
 }
 
 FILE* sfs_open_file(struct S_SFS_FILE *sfs_file) {
-    sfs_file->file_buf = malloc(sfs_file->file_len);
     FILE *f = sfs_file->sfs->file;
     int bs = sfs_file->sfs->block_size;
+
+    sfs_file->file_buf = malloc(sfs_file->file_len);
+
+    /* read file contents to file_buf */
     fseek(f, sfs_file->start_block * bs, SEEK_SET);
-    fread(sfs_file->file_buf, sfs_file->file_len, 1, f);    
-    sfs_file->file = fmemopen(&sfs_file->file_buf, sfs_file->file_len, "r");
+    fread(sfs_file->file_buf, 1, sfs_file->file_len, f);
+
+    sfs_file->file = fmemopen(sfs_file->file_buf, sfs_file->file_len, "r");
     if (sfs_file->file == NULL) {
         fprintf(stderr, "\nERROR: open_memstream \"%s\"\n", strerror(errno));
         return NULL;
