@@ -41,8 +41,6 @@ union entry {
     struct S_SFS_DIR *dir;
     struct S_SFS_FILE *file;
     struct S_SFS_UNUSABLE *unusable;
-    struct S_SFS_DIR_DEL *dir_del;
-    struct S_SFS_FILE_DEL *file_del;
     void *null;
 };
 
@@ -107,27 +105,6 @@ struct S_SFS_UNUSABLE {
     uint64_t start_block;
     uint64_t end_block;
     uint8_t resv1[38];
-};
-
-/* The Deleted Directory Entry */
-struct S_SFS_DIR_DEL {
-    uint8_t type;
-    uint8_t crc;
-    uint8_t num_cont;
-    int64_t time_stamp;
-    uint8_t *name;
-};
-
-/* The Deleted File Entry */
-struct S_SFS_FILE_DEL {
-    uint8_t type;
-    uint8_t crc;
-    uint8_t num_cont;
-    int64_t time_stamp;
-    uint64_t start_block;
-    uint64_t end_block;
-    uint64_t file_len;
-    uint8_t *name;
 };
 
 struct sfs *sfs_make(char *filename);

@@ -205,8 +205,8 @@ struct S_SFS_UNUSABLE *make_unusable_entry(uint8_t *buf) {
     return unusable;    
 }
 
-struct S_SFS_DIR_DEL *make_dir_del_entry(uint8_t *buf, FILE *f) {
-    struct S_SFS_DIR_DEL *dir = malloc(sizeof(struct S_SFS_DIR_DEL));
+struct S_SFS_DIR *make_dir_del_entry(uint8_t *buf, FILE *f) {
+    struct S_SFS_DIR *dir = malloc(sizeof(struct S_SFS_DIR));
     uint8_t *cbuf = buf;
     memcpy(&dir->type, cbuf, sizeof(dir->type));
     cbuf += sizeof(dir->type);
@@ -223,8 +223,8 @@ struct S_SFS_DIR_DEL *make_dir_del_entry(uint8_t *buf, FILE *f) {
     return dir;    
 }
 
-struct S_SFS_FILE_DEL *make_file_del_entry(uint8_t *buf, FILE *f) {
-    struct S_SFS_FILE_DEL *f_entry = malloc(sizeof(struct S_SFS_FILE_DEL));
+struct S_SFS_FILE *make_file_del_entry(uint8_t *buf, FILE *f) {
+    struct S_SFS_FILE *f_entry = malloc(sizeof(struct S_SFS_FILE));
     uint8_t *cbuf = buf;
     memcpy(&f_entry->type, cbuf, sizeof(f_entry->type));
     cbuf += sizeof(f_entry->type);
@@ -272,10 +272,10 @@ union entry make_entry(struct sfs *sfs, FILE *f) {
         entry.unusable = make_unusable_entry(buf);
         break;
     case SFS_ENTRY_DIR_DEL:
-        entry.dir_del = make_dir_del_entry(buf, f);
+        entry.dir = make_dir_del_entry(buf, f);
         break;
     case SFS_ENTRY_FILE_DEL:
-        entry.file_del = make_file_del_entry(buf, f);
+        entry.file = make_file_del_entry(buf, f);
         break;
     default:
         fprintf(stderr, "bad entry type 0x%02x\n", buf[0]);
@@ -325,10 +325,10 @@ void sfs_terminate(struct sfs *sfs) {
                     free(entry.file->name);
                     break;
                 case SFS_ENTRY_DIR_DEL:
-                    free(entry.dir_del->name);
+                    free(entry.dir->name);
                     break;
                 case SFS_ENTRY_FILE_DEL:
-                    free(entry.file_del->name);
+                    free(entry.file->name);
                     break;
             }
             free(entry_list->entry.null);
