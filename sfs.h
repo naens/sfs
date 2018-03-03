@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "dirset.h"
+
 /* Index Data Area Entry Types */
 #define SFS_ENTRY_VOL_ID 0x01
 #define SFS_ENTRY_START 0x02
@@ -19,6 +21,8 @@ struct sfs {
     int block_size;
     struct S_SFS_SUPER *super;
     struct sfs_entry_list *entry_list;
+    struct sfs_del_file_list *del_file_list;
+    struct sfs_dirset_list **dirset;
 };
 
 /* The Super Block */
@@ -48,6 +52,11 @@ struct sfs_entry_list {
     uint8_t type;
     union entry entry;
     struct sfs_entry_list *next;
+};
+
+struct sfs_del_file_list {
+    struct S_SFS_FILE *file;
+    struct sfs_del_file_list *next;
 };
 
 /* The Volume ID Entry */
