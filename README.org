@@ -17,12 +17,16 @@ application/package, so it's only limited to version 1.10.
 	Deleted files:
 		- file_del: erase when trying to write and no more space.
 		=> when writing: file_del are similar to unusable
+		- create list of deleted files ordered by order
  * TODO Delete a file: mark as deleted
 	-> deleted files: order
- * TODO Load (write) a file
+	-> add to list of deleted files
+ * TODO Write a file
 	1. look in unused
 	2. look in unused + 50% oldest deleted files
 	3. look in unused + 100% deleted files
+	* writing over deleted files: reorder
+	* rest of a deleted file: add to list as unused
  * TODO Linux FUSE implementation
  * TODO Linux VFS implementation
  * TODO FreeDOS implementation
