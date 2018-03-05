@@ -13,7 +13,7 @@ struct sfs_dirset_list **sfs_dirset_init()
 
 static int hash(char *name)
 {
-    uint64_t result = 0;
+    int result = 0;
     while (*name) {
         result *= 19;
         result += *name;

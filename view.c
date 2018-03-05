@@ -5,7 +5,8 @@
 
 #include "sfs.h"
 
-void print_time_stamp(int64_t time_stamp) {
+void print_time_stamp(int64_t time_stamp)
+{
     time_t time = time_stamp >> 16;
     struct tm tm;
     if (gmtime_r(&time, &tm) == NULL) {
@@ -17,7 +18,8 @@ void print_time_stamp(int64_t time_stamp) {
     }
 }
 
-void print_super(struct S_SFS_SUPER *super) {
+void print_super(struct S_SFS_SUPER *super)
+{
     printf("super:\n");
     printf("    time_stamp: ");
     print_time_stamp(super->time_stamp);
@@ -33,7 +35,8 @@ void print_super(struct S_SFS_SUPER *super) {
     printf("    crc: %02x\n", super->crc);
 }
 
-void print_volume(struct S_SFS_VOL_ID *volume) {
+void print_volume(struct S_SFS_VOL_ID *volume)
+{
     printf("volume:\n");
     printf("    type: %02x\n", volume->type);
     printf("    crc: %02x\n", volume->crc);
@@ -44,14 +47,16 @@ void print_volume(struct S_SFS_VOL_ID *volume) {
     printf("    name: %s\n", volume->name);
 }
 
-void print_dir_entry(struct S_SFS_DIR *dir) {
+void print_dir_entry(struct S_SFS_DIR *dir)
+{
     printf("dir:");
     printf("%32s\t", dir->name);
     print_time_stamp(dir->time_stamp);
     printf("\n");
 }
 
-void print_file_entry(struct S_SFS_FILE *file) {
+void print_file_entry(struct S_SFS_FILE *file)
+{
     printf("file:");
     printf("%32s\t", file->name);
     print_time_stamp(file->time_stamp);
@@ -62,7 +67,8 @@ void print_file_entry(struct S_SFS_FILE *file) {
 }
 
 /* compare command and return arguments */
-char *test_cmd_get_args(char *cmd, char *line) {
+char *test_cmd_get_args(char *cmd, char *line)
+{
     while (*cmd == *line) {
         cmd++;
         line++;
@@ -80,7 +86,8 @@ char *test_cmd_get_args(char *cmd, char *line) {
     return res;
 }
 
-void export_file(struct sfs *sfs, char *args) {
+void export_file(struct sfs *sfs, char *args)
+{
     printf("export: args=%s\n", args);
     struct S_SFS_FILE *sfs_file = sfs_get_file_by_name(sfs, args);
     if (sfs_file == NULL) {
@@ -114,7 +121,8 @@ void export_file(struct sfs *sfs, char *args) {
     fclose(infile);
 }
 
-int loop(struct sfs *sfs) {
+int loop(struct sfs *sfs)
+{
     int cont;
     printf(">");
     char *buf = NULL;
@@ -133,7 +141,8 @@ int loop(struct sfs *sfs) {
     return cont;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     if (argc != 2) {
         fprintf(stderr, "usage: %s <image file name>\n", argv[0]);
         return 1;
