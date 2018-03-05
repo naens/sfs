@@ -7,7 +7,7 @@ application/package, so it's only limited to version 1.10.
 * Tasks
  * DONE Display files and directories with timestamps
  * DONE Read contents of a file
- * TODO Block entries in order of first block (file, unusable, free)
+ * TODO Block entries in order of first block (file, file_del, unusable, free)
 	Other entries:
 		- volume: as struct sfs member
 		- start: only while reading: do not save
@@ -15,18 +15,19 @@ application/package, so it's only limited to version 1.10.
 		- dir: make a set of names (linked list?, hash map?)
 		- dir_del: do nothing
 	Deleted files:
-		- file_del: erase when trying to write and no more space.
 		=> when writing: file_del are similar to unusable
 		- create list of deleted files ordered by order
- * TODO Delete a file: mark as deleted
+ * DONE Delete a file: mark as deleted
 	-> deleted files: order
 	-> add to list of deleted files
+	+ write entries to disk
  * TODO Write a file
 	1. look in unused
 	2. look in unused + 50% oldest deleted files
 	3. look in unused + 100% deleted files
 	* writing over deleted files: reorder
 	* rest of a deleted file: add to list as unused
+	+ write entries to disk
  * TODO Linux FUSE implementation
  * TODO Linux VFS implementation
  * TODO FreeDOS implementation

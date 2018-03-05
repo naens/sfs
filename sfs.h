@@ -19,6 +19,7 @@
 struct sfs {
     FILE *file;
     int block_size;
+    int del_file_count;
     struct S_SFS_SUPER *super;
     struct sfs_entry_list *entry_list;
     struct sfs_del_file_list *del_file_list;
@@ -103,6 +104,7 @@ struct S_SFS_FILE {
     FILE *file;
     char *file_buf;
     uint8_t *name;
+    int del_number;
     struct sfs *sfs;
 };
 
@@ -127,6 +129,11 @@ struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs);
 FILE* sfs_open_file(struct S_SFS_FILE *sfs_file);
 
 void sfs_close_file(struct S_SFS_FILE *sfs_file);
+
+void sfs_del_file(struct S_SFS_FILE *sfs_file);
+
+struct S_SFS_FILE *sfs_write_file(struct sfs *sfs, char *name,
+    char *buf, int *sz);
 
 void sfs_terminate(struct sfs *sfs);
 
