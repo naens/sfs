@@ -305,6 +305,28 @@ union entry make_entry(struct sfs *sfs, FILE *f)
     return entry;
 }
 
+int get_entry_start(struct sfs_entry_list *list)
+{
+    switch (list->type) {
+    case SFS_ENTRY_FILE:
+        return list->entry.file->start_block;
+    case SFS_ENTRY_UNUSABLE:
+        return list->entry.unusable->start_block;
+    case SFS_ENTRY_FILE_DEL:
+        return list->entry.file->start_block;
+    default:
+        return -1;
+    }
+}
+
+void insert_entry(struct sfs_entry_list **list, struct sfs_entry_list *item)
+{
+    while (*list && get_entry_start(*list) < get_entry_start(item))
+        list = &(*list)->next;
+    item->next = (*list);
+    *list = item;
+}
+
 struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs)
 {
     if (sfs->entry_list != NULL)
@@ -319,19 +341,23 @@ struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs)
 
     union entry entry = make_entry(sfs, sfs->file);
     while (entry.null != NULL) {
-        /* TODO: add only file, unusable, file_del */
-        /* TODO: insert sorted by start block */
-        struct sfs_entry_list *list = malloc(sizeof(struct sfs_entry_list));
-        list->entry = entry;
-        list->type = ((uint8_t*)entry.null)[0];
-        list->next = sfs->entry_list;
-        sfs->entry_list = list;
-        if (list->type == SFS_ENTRY_VOL_ID)
+        int type = ((uint8_t*)entry.null)[0];
+        if (type == SFS_ENTRY_FILE || type == SFS_ENTRY_UNUSABLE
+          || type == SFS_ENTRY_FILE_DEL)
+        {
+            struct sfs_entry_list *list = malloc(sizeof(struct sfs_entry_list));
+            list->entry = entry;
+            list->type = type;
+            insert_entry(&sfs->entry_list, list);
+        }
+        if (type == SFS_ENTRY_VOL_ID)
             break;
         if (feof(sfs->file))
             break;
         entry = make_entry(sfs, sfs->file);
     }
+
+    /* TODO: fill gaps in entry list with free entries */
     return sfs->entry_list;
 }
 
@@ -400,6 +426,7 @@ void sfs_close_file(struct S_SFS_FILE *sfs_file)
 
 void sfs_write_entries(struct sfs *sfs)
 {
+    /* TODO */
 }
 
 void sfs_del_file(struct S_SFS_FILE *sfs_file)
@@ -415,9 +442,16 @@ void sfs_del_file(struct S_SFS_FILE *sfs_file)
     sfs_write_entries(sfs);
 }
 
+/* write buffer to new file */
 struct S_SFS_FILE *sfs_write_file(struct sfs *sfs, char *name,
     char *buf, int *sz)
 {
+    /* TODO: find place to write */
+    /* TODO: delete/resize entries */
+    /* TODO: write file to blocks */
+
+    /* write new entries */
+    sfs_write_entries(sfs);
     return NULL;
 }
 
