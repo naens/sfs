@@ -29,5 +29,4 @@ application/package, so it's only limited to version 1.10.
 	* rest of a deleted file: add to list as unused
 	+ write entries to disk
  * TODO Linux FUSE implementation
- * TODO Linux VFS implementation
- * TODO FreeDOS implementation
+ * TODO OS/2 IFS
