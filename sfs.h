@@ -12,7 +12,7 @@
 #define SFS_ENTRY_UNUSABLE 0x18
 #define SFS_ENTRY_DIR_DEL 0x19
 #define SFS_ENTRY_FILE_DEL 0x1A
-
+ 
 #define DIR_NAME_LEN 53
 #define FILE_NAME_LEN 29
 
@@ -23,6 +23,7 @@ struct sfs {
     struct S_SFS_SUPER *super;
     struct sfs_entry_list *entry_list;
     struct sfs_del_file_list *del_file_list;
+    struct sfs_del_file_list *del_file_tail;
     struct sfs_dirset_list **dirset;
 };
 
@@ -98,6 +99,7 @@ struct S_SFS_FILE {
     uint8_t crc;
     uint8_t num_cont;
     int64_t time_stamp;
+    long f_offset;
     uint64_t start_block;
     uint64_t end_block;
     uint64_t file_len;
@@ -112,6 +114,7 @@ struct S_SFS_FILE {
 struct S_SFS_UNUSABLE {
     uint8_t type;
     uint8_t crc;
+    long f_offset;
     uint8_t resv0[8];
     uint64_t start_block;
     uint64_t end_block;
