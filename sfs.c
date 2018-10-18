@@ -14,28 +14,160 @@
 #define SFS_ENTRY_UNUSABLE 0x18
 #define SFS_ENTRY_DIR_DEL 0x19
 #define SFS_ENTRY_FILE_DEL 0x1A
- 
-#define DIR_NAME_LEN 53
-#define FILE_NAME_LEN 29
+
+#define SFS_SUPER_START 0x18e
+#define SFS_SUPER_SIZE 42
+#define SFS_VOL_NAME_LEN 52
+#define SFS_ENTRY_SIZE 64
+#define SFS_DIR_NAME_LEN 53
+#define SFS_FILE_NAME_LEN 29
+
+struct sfs {
+    FILE *file;
+    int block_size;
+    int del_file_count;
+    struct sfs_super *super;
+    struct sfs_entry *volume;
+    struct sfs_entry *entry_list;
+    struct sfs_entry *iter_curr;
+};
+
+struct sfs_super {
+    int64_t time_stamp;
+    uint64_t data_size;
+    uint64_t index_size;
+    uint8_t magic[3];
+    uint8_t version;
+    uint64_t total_blocks;
+    uint32_t rsvd_blocks;
+    uint8_t block_size;
+};
+
+/* The Volume ID Entry Data */
+struct sfs_vol {
+    int64_t time_stamp;
+    uint8_t *name;
+};
+
+/* The Directory Entry Data */
+struct sfs_dir {
+    uint8_t num_cont;
+    int64_t time_stamp;
+    uint8_t *name;
+};
+
+/* The File Entry Data */
+struct sfs_file {
+    uint8_t num_cont;
+    int64_t time_stamp;
+    uint64_t start_block;
+    uint64_t end_block;
+    uint64_t file_len;
+    uint8_t *name;
+};
+
+/* The Unusable Entry Data */
+struct sfs_unusable {
+    uint64_t start_block;
+    uint64_t end_block;
+};
+
+struct sfs_entry {
+    uint8_t type;
+    long int offset;
+    union {
+        struct sfs_vol *volume_data;
+        struct sfs_dir *dir_data;
+        struct sfs_file *file_data;
+        struct sfs_unusable *unusable_data;
+    } data;
+    struct sfs_entry *next;
+};
 
 /* TODO: old */
-struct sfs *sfs_make(char *filename)
-{
-    struct sfs *sfs = malloc(sizeof(struct sfs));
-    sfs->super = NULL;
-    sfs->block_size = 0;
-    sfs->entry_list = NULL;
-    sfs->file = fopen(filename, "r");
-    if (sfs->file == NULL) {
-        fprintf(stderr, "file error\n");
-        return NULL;
-    }
-    sfs->del_file_count = 0;
-    sfs->del_file_list = NULL;
-    return sfs;
-}
+union entry {
+    struct S_SFS_VOL_ID *volume;
+    struct S_SFS_START *start;
+    struct S_SFS_UNUSED *unused;
+    struct S_SFS_DIR *dir;
+    struct S_SFS_FILE *file;
+    struct S_SFS_UNUSABLE *unusable;
+    void *null;
+};
 
 /* TODO: old */
+struct sfs_entry_list {
+    uint8_t type;
+    union entry entry;
+    struct sfs_entry_list *next;
+};
+
+/* TODO: old */
+struct sfs_del_file_list {
+    struct S_SFS_FILE *file;
+    struct sfs_del_file_list *next;
+};
+
+/* The Volume ID Entry */
+struct sfs_volume {
+    uint8_t type;
+    uint8_t crc;
+    uint16_t resvd;
+    int64_t time_stamp;
+    uint8_t name[SFS_VOL_NAME_LEN];
+};
+
+/* The Start Marker Entry */
+struct S_SFS_START {
+    uint8_t type;
+    uint8_t crc;
+    uint8_t resvd[62];
+};
+
+/* The Unused Entry */
+struct S_SFS_UNUSED {
+    uint8_t type;
+    uint8_t crc;
+    uint8_t resvd[62];
+};
+
+/* The Directory Entry */
+struct S_SFS_DIR {
+    uint8_t type;
+    uint8_t crc;
+    uint8_t num_cont;
+    uint8_t *name;
+    int64_t time_stamp;
+};
+
+/* The File Entry */
+struct S_SFS_FILE {
+    uint8_t type;
+    uint8_t crc;
+    uint8_t num_cont;
+    int64_t time_stamp;
+    long f_offset;
+    uint64_t start_block;
+    uint64_t end_block;
+    uint64_t file_len;
+    FILE *file;
+    char *file_buf;
+    uint8_t *name;
+    int del_number;
+    struct sfs *sfs;
+};
+
+/* The Unusable Entry */
+struct S_SFS_UNUSABLE {
+    uint8_t type;
+    uint8_t crc;
+    long f_offset;
+    uint8_t resv0[8];
+    uint64_t start_block;
+    uint64_t end_block;
+    uint8_t resv1[38];
+};
+
 int check_crc(uint8_t *buf, int sz)
 {
     uint8_t sum = 0;
@@ -48,22 +180,18 @@ int check_crc(uint8_t *buf, int sz)
     return 1;
 }
 
-/* TODO: old */
-struct S_SFS_SUPER *sfs_get_super(struct sfs *sfs)
+struct sfs_super *sfs_read_super(struct sfs *sfs)
 {
-    if (sfs->super != NULL)
-        return sfs->super;
-
-    sfs->super = malloc(sizeof(struct S_SFS_SUPER));
-    uint8_t buf[42];
+    sfs->super = malloc(sizeof(struct sfs_super));
+    uint8_t buf[SFS_SUPER_SIZE];
     uint8_t *cbuf = buf;
 
-    if (fseek(sfs->file, 0x18e, SEEK_SET) != 0) {
+    if (fseek(sfs->file, SFS_SUPER_START, SEEK_SET) != 0) {
         fprintf(stderr, "fseek error\n");
         return NULL;
     }
 
-    fread(buf, 42, 1, sfs->file);
+    fread(buf, SFS_SUPER_SIZE, 1, sfs->file);
     memcpy(&sfs->super->time_stamp, cbuf, sizeof(sfs->super->time_stamp));
     cbuf += sizeof(sfs->super->time_stamp);
     memcpy(&sfs->super->data_size, cbuf, sizeof(sfs->super->data_size));
@@ -82,45 +210,361 @@ struct S_SFS_SUPER *sfs_get_super(struct sfs *sfs)
     memcpy(&sfs->super->block_size, cbuf, sizeof(sfs->super->block_size));
     cbuf += sizeof(sfs->super->block_size);
     sfs->block_size = 1 << (sfs->super->block_size + 7);
-    memcpy(&sfs->super->crc, cbuf, sizeof(sfs->super->crc));
 
-    if (!check_crc(buf + m, 42 - m)) {
+    if (!check_crc(buf + m, SFS_SUPER_SIZE - m)) {
         return NULL;
     }    
     return sfs->super;
 }
 
+struct sfs_entry *sfs_read_volume_data(uint8_t *buf, struct sfs_entry *entry)
+{
+    struct sfs_vol *volume_data = malloc(sizeof(struct sfs_vol));
+    uint8_t *cbuf = buf + 4; /* skip type, crc, and resvd */
+    memcpy(&volume_data->time_stamp, cbuf, sizeof(volume_data->time_stamp));
+    cbuf += sizeof(volume_data->time_stamp);
+    volume_data->name = malloc(SFS_VOL_NAME_LEN);
+    memcpy(volume_data->name, cbuf, SFS_VOL_NAME_LEN);
+    entry->data.volume_data = volume_data;
+    if (!check_crc(buf, SFS_ENTRY_SIZE)) {
+        return NULL;
+    }
+    return entry;
+}
+
+struct sfs_entry *sfs_read_dir_data(uint8_t *buf, struct sfs_entry *entry, FILE *file)
+{
+    uint8_t *b = buf;
+    struct sfs_dir *dir_data = malloc(sizeof(struct sfs_dir));
+
+    memcpy(&dir_data->num_cont, &buf[2], 1);
+    memcpy(&dir_data->time_stamp, &buf[3], 8);
+
+    const int cont_len = dir_data->num_cont * SFS_ENTRY_SIZE;
+    const int name_len = SFS_DIR_NAME_LEN + cont_len;
+    printf("dir: name_len=%d ", name_len);
+
+    dir_data->name = malloc(name_len);
+    int bufsz = SFS_ENTRY_SIZE * (1 + dir_data->num_cont);
+    uint8_t buf2[bufsz];
+    if (dir_data->num_cont != 0) {
+        b = buf2;
+        memcpy(buf2, buf, SFS_ENTRY_SIZE);  /* copy from old buffer to new */
+        fread(buf2 + SFS_ENTRY_SIZE, cont_len, 1, file); /* copy into new */
+    }
+    memcpy(dir_data->name, &b[11], name_len);
+    if (!check_crc(b, bufsz)) {
+        return NULL;
+    }
+    entry->data.dir_data = dir_data;
+    printf(" name=%s\n", dir_data->name);
+    return entry;   
+}
+
+struct sfs_entry *sfs_read_file_data(uint8_t *buf, struct sfs_entry *entry, FILE *file)
+{
+    uint8_t *b = buf;
+    struct sfs_file *file_data = malloc(sizeof(struct sfs_file));
+
+    memcpy(&file_data->num_cont, &buf[2], 1);
+    memcpy(&file_data->time_stamp, &buf[3], 8);
+    memcpy(&file_data->start_block, &buf[11], 8);
+    memcpy(&file_data->end_block, &buf[19], 8);
+    memcpy(&file_data->file_len, &buf[27], 8);
+
+    const int cont_len = file_data->num_cont * SFS_ENTRY_SIZE;
+    const int name_len = SFS_FILE_NAME_LEN + cont_len;
+    printf("file: name_len=%d ", name_len);
+
+    file_data->name = malloc(name_len);
+    int bufsz = SFS_ENTRY_SIZE * (1 + file_data->num_cont);
+    uint8_t buf2[bufsz];
+    if (file_data->num_cont != 0) {
+        b = buf2;
+        memcpy(buf2, buf, SFS_ENTRY_SIZE);  /* copy from old buffer to new */
+        fread(buf2 + SFS_ENTRY_SIZE, cont_len, 1, file); /* copy into new */
+    }
+    memcpy(file_data->name, &b[35], name_len);
+    if (!check_crc(b, bufsz)) {
+        return NULL;
+    }
+    entry->data.file_data = file_data;
+    printf("name=%s\n", file_data->name);
+    return entry;   
+}
+
+struct sfs_entry *sfs_read_unusable_data(uint8_t *buf, struct sfs_entry *entry)
+{
+    struct sfs_unusable *unusable_data = malloc(sizeof(struct sfs_unusable));
+    memcpy(&unusable_data->start_block, &buf[10], 8);
+    memcpy(&unusable_data->end_block, &buf[18], 8);
+    entry->data.unusable_data = unusable_data;
+    if (!check_crc(buf, SFS_ENTRY_SIZE)) {
+        return NULL;
+    }
+    return entry;
+}
+
+/* read entry, at current location */
+struct sfs_entry *sfs_read_entry(SFS *sfs) {
+
+    uint8_t buf[SFS_ENTRY_SIZE];
+
+    struct sfs_entry *entry = malloc(sizeof(struct sfs_entry));
+    entry->offset = ftell(sfs->file);
+    if (entry->offset == -1) {
+        return NULL;
+    }
+    fread(buf, SFS_ENTRY_SIZE, 1, sfs->file);
+    entry->type = buf[0];
+    entry->next = NULL;
+    switch (entry->type) {
+    case SFS_ENTRY_VOL_ID:
+        return sfs_read_volume_data(buf, entry);
+    case SFS_ENTRY_DIR:
+    case SFS_ENTRY_DIR_DEL:
+        return sfs_read_dir_data(buf, entry, sfs->file);
+    case SFS_ENTRY_FILE:
+    case SFS_ENTRY_FILE_DEL:
+        return sfs_read_file_data(buf, entry, sfs->file);
+    case SFS_ENTRY_UNUSABLE:
+        return sfs_read_unusable_data(buf, entry);
+    default:
+        printf("entry->type=%x\n", entry->type);
+        return entry;
+    }
+}
+
+struct sfs_entry *sfs_read_volume(SFS *sfs)
+{
+    int vol_offset = sfs->block_size * sfs->super->total_blocks - SFS_ENTRY_SIZE;
+    if (fseek(sfs->file, vol_offset, SEEK_SET) != 0) {
+        fprintf(stderr, "fseek error\n");
+        return NULL;
+    }
+
+    struct sfs_entry *volume = sfs_read_entry(sfs);
+    if (volume->type != SFS_ENTRY_VOL_ID) {
+        return NULL;
+    }
+
+    return volume;
+}
+
+struct sfs_entry *sfs_read_entries(SFS *sfs) {
+    int offset = sfs->block_size * sfs->super->total_blocks - sfs->super->index_size;
+    printf("bs=0x%x, tt=0x%lxH, is=0x%lx, of=0x%x\n",
+        sfs->block_size, sfs->super->total_blocks, sfs->super->index_size, offset);
+    if (fseek(sfs->file, offset, SEEK_SET) != 0) {
+        fprintf(stderr, "fseek error\n");
+        return NULL;
+    }
+    struct sfs_entry *entry = sfs_read_entry(sfs);
+    struct sfs_entry *head = entry;
+    while (entry->type != SFS_ENTRY_VOL_ID) {
+        struct sfs_entry *prev = entry;
+        entry = sfs_read_entry(sfs);
+        prev->next = entry;
+    }
+    sfs->volume = entry;
+    return head;
+}
+
+SFS *sfs_init(const char *filename) {
+    SFS *sfs = malloc(sizeof(SFS));
+    sfs->file = fopen(filename, "r");
+    if (sfs->file == NULL) {
+        perror("sfs_init error");
+        fprintf(stderr, "sfs_init: file error \"%s\"\n", filename);
+        return NULL;
+    }
+    sfs->super = sfs_read_super(sfs);
+    sfs->entry_list = sfs_read_entries(sfs);
+    return sfs;
+}
+
+void free_entry(struct sfs_entry *entry) {
+    printf("freeing: %x\n", entry->type);
+    switch (entry->type) {
+    case SFS_ENTRY_VOL_ID:
+        free(entry->data.volume_data->name);
+        free(entry->data.volume_data);
+        break;
+    case SFS_ENTRY_DIR:
+    case SFS_ENTRY_DIR_DEL:
+        free(entry->data.dir_data->name);
+        free(entry->data.dir_data);
+        break;
+    case SFS_ENTRY_FILE:
+    case SFS_ENTRY_FILE_DEL:
+        free(entry->data.file_data->name);
+        free(entry->data.file_data);
+        break;
+    case SFS_ENTRY_UNUSABLE:
+        free(entry->data.unusable_data);
+        break;
+    default:
+        break;
+    }
+    free(entry);
+}
+
+int sfs_terminate(SFS *sfs) {
+
+    printf("free sfs\n");
+    // free entry list
+    struct sfs_entry *prev = sfs->entry_list;
+    struct sfs_entry *curr = prev->next;
+    while (curr != NULL) {
+        free_entry(prev);
+        prev = curr;
+        curr = curr->next;
+    }
+    free_entry(prev);
+
+    /* TODO: free block list */
+
+    free(sfs->super);
+    fclose(sfs->file);
+    free(sfs);
+    return 0;
+}
+
+char *fix_name(const char *path) {
+    char *result = (char *)path;
+    while (*result == '/')
+        result++;
+    return result;
+}
+
+uint64_t sfs_get_file_size(SFS *sfs, const char *path)
+{
+    char *fxpath = fix_name(path);
+    struct sfs_entry *entry = sfs->entry_list;
+    while (entry != NULL) {
+        if (entry->type == SFS_ENTRY_FILE
+                && strcmp(fxpath, (char *)entry->data.file_data->name) == 0) {
+            return entry->data.file_data->file_len;
+        }
+        entry = entry->next;
+    }
+    return 0;
+}
+
+int sfs_is_dir(SFS *sfs, const char *path)
+{
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_is_dir: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = sfs->entry_list;
+    while (entry != NULL) {
+        if (entry->type == SFS_ENTRY_DIR
+                && strcmp(fxpath, (char *)entry->data.dir_data->name) == 0) {
+            return 1;
+        }
+        entry = entry->next;
+    }
+    return 0;
+}
+
+int sfs_is_file(SFS *sfs, const char *path)
+{
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_is_file: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = sfs->entry_list;
+    while (entry != NULL) {
+        if (entry->type == SFS_ENTRY_FILE
+                && strcmp(fxpath, (char *)entry->data.file_data->name) == 0) {
+            return 1;
+        }
+        entry = entry->next;
+    }
+    return 0;
+}
+
+struct sfs_entry *find_entry_from(struct sfs_entry *entry, char *path) {
+    int len = strlen(path);
+    while (entry != NULL) {
+        if (entry->type == SFS_ENTRY_DIR) {
+            char *name = (char *)entry->data.dir_data->name;
+            printf("[path=%s]dirname=%s\n", path, name);
+            int name_len = strlen(name);
+            if ((len == 0 || (name_len > len + 1 && name[len] == '/'))
+                    && strncmp(path, name, len) == 0 && strchr(&name[len+1], '/') == NULL) {
+                printf("OK!\n");
+                return entry;
+            }
+        } else if (entry->type == SFS_ENTRY_FILE) {
+            char *name = (char *)entry->data.file_data->name;
+            printf("[path=%s]filename=%s\n", path, name);
+            int name_len = strlen(name);
+            if ((len == 0 || (name_len > len + 1 && name[len] == '/'))
+                    && strncmp(path, name, len) == 0 && strchr(&name[len+1], '/') == NULL) {
+                printf("OK!\n");
+                return entry;
+            }
+        }
+        entry = entry->next;
+    }
+    printf("<<<<END OF ENTRIES>>>>\n");
+    return NULL;
+}
+
+char *get_entry_name(struct sfs_entry *entry) {
+    switch (entry->type) {
+    case SFS_ENTRY_DIR:
+    case SFS_ENTRY_DIR_DEL:
+        return (char*)entry->data.dir_data->name;
+    case SFS_ENTRY_FILE:
+    case SFS_ENTRY_FILE_DEL:
+        return (char*)entry->data.file_data->name;
+    default:
+        return NULL;
+    }
+}
+
+char *sfs_first(SFS *sfs, const char *path) {
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_first: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = find_entry_from(sfs->entry_list, fxpath);
+    if (entry != NULL) {
+        sfs->iter_curr = entry->next;
+//        printf("found: %s\n", get_entry_name(entry));
+        printf("\n");
+        return get_entry_name(entry);
+    }
+    sfs->iter_curr = NULL;
+    return NULL;
+}
+
+char *sfs_next(SFS *sfs, const char *path) {
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_next: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = find_entry_from(sfs->iter_curr, fxpath);
+    if (entry != NULL) {
+        sfs->iter_curr = entry->next;
+//        printf("found: %s\n", get_entry_name(entry));
+        printf("\n");
+        return get_entry_name(entry);
+    }
+    sfs->iter_curr = NULL;
+    return NULL;
+}
+
 
 /* TODO: old */
+struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs);
 struct S_SFS_VOL_ID *sfs_get_volume(struct sfs *sfs)
 {
+/*
     struct sfs_entry_list *list= sfs_get_entry_list(sfs);
     while (list != NULL && list->type != SFS_ENTRY_VOL_ID)
         list = list->next;
     if (list != NULL)
         return list->entry.volume;
     else
+*/
         return NULL;
-}
 
-/* TODO: old */
-struct S_SFS_VOL_ID *make_volume_entry(uint8_t *buf)
-{
-    struct S_SFS_VOL_ID *volume = malloc(sizeof(struct S_SFS_VOL_ID));
-    uint8_t *cbuf = buf;
-    memcpy(&volume->type, cbuf, sizeof(volume->type));
-    cbuf += sizeof(volume->type);
-    memcpy(&volume->crc, cbuf, sizeof(volume->crc));
-    cbuf += sizeof(volume->crc);
-    memcpy(&volume->resvd, cbuf, sizeof(volume->resvd));
-    cbuf += sizeof(volume->resvd);
-    memcpy(&volume->time_stamp, cbuf, sizeof(volume->time_stamp));
-    cbuf += sizeof(volume->time_stamp);
-    memcpy(volume->name, cbuf, sizeof(volume->name));
-    if (!check_crc(buf, 64)) {
-        return NULL;
-    }
-    return volume;    
 }
 
 /* TODO: old */
@@ -184,7 +628,7 @@ struct S_SFS_DIR *make_dir_entry(uint8_t *buf, FILE *f)
     cbuf += sizeof(dir->num_cont);
     memcpy(&dir->time_stamp, cbuf, sizeof(dir->time_stamp));
     cbuf += sizeof(dir->time_stamp);
-    dir->name = rw_cont_name(DIR_NAME_LEN, cbuf, f, dir->num_cont);
+    dir->name = rw_cont_name(SFS_DIR_NAME_LEN, cbuf, f, dir->num_cont);
     if (!check_crc(buf, 64 * (1 + dir->num_cont))) {
         return NULL;
     }    
@@ -213,7 +657,7 @@ struct S_SFS_FILE *make_file_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
     f_entry->file = NULL;
     f_entry->file_buf = NULL;
     f_entry->sfs = sfs;
-    f_entry->name = rw_cont_name(FILE_NAME_LEN, cbuf, f, f_entry->num_cont);
+    f_entry->name = rw_cont_name(SFS_FILE_NAME_LEN, cbuf, f, f_entry->num_cont);
     if (!check_crc(buf, 64 * (1 + f_entry->num_cont))) {
         return NULL;
     }
@@ -256,14 +700,16 @@ struct S_SFS_DIR *make_dir_del_entry(uint8_t *buf, FILE *f)
     cbuf += sizeof(dir->num_cont);
     memcpy(&dir->time_stamp, cbuf, sizeof(dir->time_stamp));
     cbuf += sizeof(dir->time_stamp);
-    dir->name = rw_cont_name(DIR_NAME_LEN, cbuf, f, dir->num_cont);
+    dir->name = rw_cont_name(SFS_DIR_NAME_LEN, cbuf, f, dir->num_cont);
     if (!check_crc(buf, 64 * (1 + dir->num_cont))) {
         return NULL;
     }    
     return dir;    
 }
 
+
 /* TODO: old */
+void sfs_del_file(struct S_SFS_FILE *sfs_file);
 struct S_SFS_FILE *make_file_del_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
 {
     struct S_SFS_FILE *f_entry = malloc(sizeof(struct S_SFS_FILE));
@@ -285,7 +731,7 @@ struct S_SFS_FILE *make_file_del_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
     f_entry->file = NULL;
     f_entry->file_buf = NULL;
     f_entry->sfs = sfs;
-    f_entry->name = rw_cont_name(FILE_NAME_LEN, cbuf, f, f_entry->num_cont);
+    f_entry->name = rw_cont_name(SFS_FILE_NAME_LEN, cbuf, f, f_entry->num_cont);
     if (!check_crc(buf, 64 * (1 + f_entry->num_cont))) {
         return NULL;
     }
@@ -301,9 +747,9 @@ union entry make_entry(struct sfs *sfs, FILE *f)
     uint8_t buf[64];
     fread(buf, 64, 1, f);
     switch (buf[0]) {
-    case SFS_ENTRY_VOL_ID:
-        entry.volume = make_volume_entry(buf);
-        break;
+//    case SFS_ENTRY_VOL_ID:
+//        entry.volume = make_volume_entry(buf);
+//        break;
     case SFS_ENTRY_START:
         entry.start = make_start_entry(buf);
         break;
@@ -336,12 +782,14 @@ union entry make_entry(struct sfs *sfs, FILE *f)
 int get_entry_start(struct sfs_entry_list *list)
 {
     switch (list->type) {
+/*
     case SFS_ENTRY_FILE:
         return list->entry.file->start_block;
     case SFS_ENTRY_UNUSABLE:
         return list->entry.unusable->start_block;
     case SFS_ENTRY_FILE_DEL:
         return list->entry.file->start_block;
+*/
     default:
         return -1;
     }
@@ -359,16 +807,19 @@ void insert_entry(struct sfs_entry_list **list, struct sfs_entry_list *item)
 /* TODO: old */
 struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs)
 {
+/*
     if (sfs->entry_list != NULL)
         return sfs->entry_list;
-
+*/
     /* find location of entries */
+
     int n_entries = sfs->super->index_size / 64;
     if (fseek(sfs->file, -(64 * n_entries), SEEK_END) != 0) {
         fprintf(stderr, "fseek error\n");
         return NULL;
     }
 
+/*
     union entry entry = make_entry(sfs, sfs->file);
     while (entry.null != NULL) {
         int type = ((uint8_t*)entry.null)[0];
@@ -386,14 +837,16 @@ struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs)
             break;
         entry = make_entry(sfs, sfs->file);
     }
-
+*/
     /* TODO: fill gaps in entry list with free entries */
-    return sfs->entry_list;
+//    return sfs->entry_list;
+    return NULL;
 }
 
 /* TODO: old */
-void sfs_terminate(struct sfs *sfs)
+void sfs_terminate_old(struct sfs *sfs)
 {
+/*
     if (sfs->entry_list != NULL) {
         struct sfs_entry_list *entry_list = sfs->entry_list;
         struct sfs_entry_list *old;
@@ -426,6 +879,7 @@ void sfs_terminate(struct sfs *sfs)
         fclose(sfs->file);
     }
     free(sfs);
+*/
 }
 
 /* TODO: old */
@@ -466,6 +920,7 @@ void sfs_write_entries(struct sfs *sfs)
 /* TODO: old */
 void sfs_del_file(struct S_SFS_FILE *sfs_file)
 {
+/*
     struct sfs *sfs = sfs_file->sfs;
     struct sfs_del_file_list *new_list = malloc(sizeof(new_list));
 
@@ -475,6 +930,7 @@ void sfs_del_file(struct S_SFS_FILE *sfs_file)
     sfs->del_file_count++;
     sfs_file->del_number = sfs->del_file_count;
     sfs_write_entries(sfs);
+*/
 }
 
 /* TODO: old */
@@ -494,6 +950,7 @@ struct S_SFS_FILE *sfs_write_file(struct sfs *sfs, char *name,
 /* TODO: old */
 struct S_SFS_FILE *sfs_get_file_by_name(struct sfs *sfs, char *name)
 {
+/*
     struct sfs_entry_list* entries = sfs_get_entry_list(sfs);
     struct S_SFS_FILE *f_entry;
     while (entries != NULL) {
@@ -504,5 +961,6 @@ struct S_SFS_FILE *sfs_get_file_by_name(struct sfs *sfs, char *name)
         }
         entries = entries->next;
     }
+*/
     return NULL;
 }
