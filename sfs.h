@@ -1,21 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "dirset.h"
-
-/* Index Data Area Entry Types */
-#define SFS_ENTRY_VOL_ID 0x01
-#define SFS_ENTRY_START 0x02
-#define SFS_ENTRY_UNUSED 0x10
-#define SFS_ENTRY_DIR 0x11
-#define SFS_ENTRY_FILE 0x12
-#define SFS_ENTRY_UNUSABLE 0x18
-#define SFS_ENTRY_DIR_DEL 0x19
-#define SFS_ENTRY_FILE_DEL 0x1A
- 
-#define DIR_NAME_LEN 53
-#define FILE_NAME_LEN 29
-
 struct sfs {
     FILE *file;
     int block_size;

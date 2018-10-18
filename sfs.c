@@ -5,6 +5,20 @@
 
 #include "sfs.h"
 
+/* Index Data Area Entry Types */
+#define SFS_ENTRY_VOL_ID 0x01
+#define SFS_ENTRY_START 0x02
+#define SFS_ENTRY_UNUSED 0x10
+#define SFS_ENTRY_DIR 0x11
+#define SFS_ENTRY_FILE 0x12
+#define SFS_ENTRY_UNUSABLE 0x18
+#define SFS_ENTRY_DIR_DEL 0x19
+#define SFS_ENTRY_FILE_DEL 0x1A
+ 
+#define DIR_NAME_LEN 53
+#define FILE_NAME_LEN 29
+
+/* TODO: old */
 struct sfs *sfs_make(char *filename)
 {
     struct sfs *sfs = malloc(sizeof(struct sfs));
@@ -21,6 +35,7 @@ struct sfs *sfs_make(char *filename)
     return sfs;
 }
 
+/* TODO: old */
 int check_crc(uint8_t *buf, int sz)
 {
     uint8_t sum = 0;
@@ -33,6 +48,7 @@ int check_crc(uint8_t *buf, int sz)
     return 1;
 }
 
+/* TODO: old */
 struct S_SFS_SUPER *sfs_get_super(struct sfs *sfs)
 {
     if (sfs->super != NULL)
@@ -75,6 +91,7 @@ struct S_SFS_SUPER *sfs_get_super(struct sfs *sfs)
 }
 
 
+/* TODO: old */
 struct S_SFS_VOL_ID *sfs_get_volume(struct sfs *sfs)
 {
     struct sfs_entry_list *list= sfs_get_entry_list(sfs);
@@ -86,6 +103,7 @@ struct S_SFS_VOL_ID *sfs_get_volume(struct sfs *sfs)
         return NULL;
 }
 
+/* TODO: old */
 struct S_SFS_VOL_ID *make_volume_entry(uint8_t *buf)
 {
     struct S_SFS_VOL_ID *volume = malloc(sizeof(struct S_SFS_VOL_ID));
@@ -105,6 +123,7 @@ struct S_SFS_VOL_ID *make_volume_entry(uint8_t *buf)
     return volume;    
 }
 
+/* TODO: old */
 struct S_SFS_START *make_start_entry(uint8_t *buf)
 {
     struct S_SFS_START *start = malloc(sizeof(struct S_SFS_START));
@@ -120,6 +139,7 @@ struct S_SFS_START *make_start_entry(uint8_t *buf)
     return start;    
 }
 
+/* TODO: old */
 struct S_SFS_UNUSED *make_unused_entry(uint8_t *buf)
 {
     struct S_SFS_UNUSED *unused = malloc(sizeof(struct S_SFS_UNUSED));
@@ -135,6 +155,7 @@ struct S_SFS_UNUSED *make_unused_entry(uint8_t *buf)
     return unused;    
 }
 
+/* TODO: old */
 uint8_t *rw_cont_name(int init_len, uint8_t *init_buf, FILE *f, int n_cont)
 {
     uint8_t *name = malloc(init_len + 64 * n_cont);
@@ -150,6 +171,7 @@ uint8_t *rw_cont_name(int init_len, uint8_t *init_buf, FILE *f, int n_cont)
     return name;
 }
 
+/* TODO: old */
 struct S_SFS_DIR *make_dir_entry(uint8_t *buf, FILE *f)
 {
     struct S_SFS_DIR *dir = malloc(sizeof(struct S_SFS_DIR));
@@ -169,6 +191,7 @@ struct S_SFS_DIR *make_dir_entry(uint8_t *buf, FILE *f)
     return dir;    
 }
 
+/* TODO: old */
 struct S_SFS_FILE *make_file_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
 {
     struct S_SFS_FILE *f_entry = malloc(sizeof(struct S_SFS_FILE));
@@ -198,6 +221,7 @@ struct S_SFS_FILE *make_file_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
     return f_entry;    
 }
 
+/* TODO: old */
 struct S_SFS_UNUSABLE *make_unusable_entry(uint8_t *buf)
 {
     struct S_SFS_UNUSABLE *unusable = malloc(sizeof(struct S_SFS_UNUSABLE));
@@ -219,6 +243,7 @@ struct S_SFS_UNUSABLE *make_unusable_entry(uint8_t *buf)
     return unusable;    
 }
 
+/* TODO: old */
 struct S_SFS_DIR *make_dir_del_entry(uint8_t *buf, FILE *f)
 {
     struct S_SFS_DIR *dir = malloc(sizeof(struct S_SFS_DIR));
@@ -238,6 +263,7 @@ struct S_SFS_DIR *make_dir_del_entry(uint8_t *buf, FILE *f)
     return dir;    
 }
 
+/* TODO: old */
 struct S_SFS_FILE *make_file_del_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
 {
     struct S_SFS_FILE *f_entry = malloc(sizeof(struct S_SFS_FILE));
@@ -267,6 +293,7 @@ struct S_SFS_FILE *make_file_del_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
     return f_entry;    
 }
 
+/* TODO: old */
 /* file must be positioned on valid entry */
 union entry make_entry(struct sfs *sfs, FILE *f)
 {
@@ -305,6 +332,7 @@ union entry make_entry(struct sfs *sfs, FILE *f)
     return entry;
 }
 
+/* TODO: old */
 int get_entry_start(struct sfs_entry_list *list)
 {
     switch (list->type) {
@@ -319,6 +347,7 @@ int get_entry_start(struct sfs_entry_list *list)
     }
 }
 
+/* TODO: old */
 void insert_entry(struct sfs_entry_list **list, struct sfs_entry_list *item)
 {
     while (*list && get_entry_start(*list) < get_entry_start(item))
@@ -327,6 +356,7 @@ void insert_entry(struct sfs_entry_list **list, struct sfs_entry_list *item)
     *list = item;
 }
 
+/* TODO: old */
 struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs)
 {
     if (sfs->entry_list != NULL)
@@ -361,6 +391,7 @@ struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs)
     return sfs->entry_list;
 }
 
+/* TODO: old */
 void sfs_terminate(struct sfs *sfs)
 {
     if (sfs->entry_list != NULL) {
@@ -397,6 +428,7 @@ void sfs_terminate(struct sfs *sfs)
     free(sfs);
 }
 
+/* TODO: old */
 FILE* sfs_open_file(struct S_SFS_FILE *sfs_file)
 {
     FILE *f = sfs_file->sfs->file;
@@ -416,6 +448,7 @@ FILE* sfs_open_file(struct S_SFS_FILE *sfs_file)
     return sfs_file->file;
 }
 
+/* TODO: old */
 void sfs_close_file(struct S_SFS_FILE *sfs_file)
 {
     fclose(sfs_file->file);
@@ -424,11 +457,13 @@ void sfs_close_file(struct S_SFS_FILE *sfs_file)
     sfs_file->file_buf = NULL;
 }
 
+/* TODO: old */
 void sfs_write_entries(struct sfs *sfs)
 {
     /* TODO */
 }
 
+/* TODO: old */
 void sfs_del_file(struct S_SFS_FILE *sfs_file)
 {
     struct sfs *sfs = sfs_file->sfs;
@@ -442,6 +477,7 @@ void sfs_del_file(struct S_SFS_FILE *sfs_file)
     sfs_write_entries(sfs);
 }
 
+/* TODO: old */
 /* write buffer to new file */
 struct S_SFS_FILE *sfs_write_file(struct sfs *sfs, char *name,
     char *buf, int *sz)
@@ -455,6 +491,7 @@ struct S_SFS_FILE *sfs_write_file(struct sfs *sfs, char *name,
     return NULL;
 }
 
+/* TODO: old */
 struct S_SFS_FILE *sfs_get_file_by_name(struct sfs *sfs, char *name)
 {
     struct sfs_entry_list* entries = sfs_get_entry_list(sfs);

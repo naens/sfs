@@ -157,12 +157,12 @@ int main(int argc, char **argv)
 
     struct sfs_entry_list *list = sfs_get_entry_list(sfs);
     while (list != NULL) {
-        if (list->type == SFS_ENTRY_FILE)
+        if (list->type == 0x12) //SFS_ENTRY_FILE
             print_file_entry(list->entry.file);
-        else if (list->type == SFS_ENTRY_DIR)
+        else if (list->type == 0x11) //SFS_ENTRY_DIR
             print_dir_entry(list->entry.dir);
-        else if (list->type != SFS_ENTRY_VOL_ID
-                && list->type != SFS_ENTRY_START)
+        else if (list->type != 0x01 //SFS_ENTRY_VOL_ID
+                && list->type != 0x02) //SFS_ENTRY_START
             printf("<entry of type 0x%02x>\n", list->type);
         list = list->next;
     }
