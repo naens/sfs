@@ -18,7 +18,7 @@ void print_time_stamp(int64_t time_stamp)
     }
 }
 
-void print_super(struct S_SFS_SUPER *super)
+void print_super(struct sfs_super *super)
 {
     printf("super:\n");
     printf("    time_stamp: ");
@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     }
 
     struct sfs *sfs = sfs_make(argv[1]);
-    struct S_SFS_SUPER *super = sfs_get_super(sfs);
+    struct sfs_super *super = sfs_get_super(sfs);
     print_super(super);
 
     struct S_SFS_VOL_ID *volume = sfs_get_volume(sfs);
