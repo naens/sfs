@@ -22,16 +22,6 @@
 #define SFS_DIR_NAME_LEN 53
 #define SFS_FILE_NAME_LEN 29
 
-struct sfs {
-    FILE *file;
-    int block_size;
-    int del_file_count;
-    struct sfs_super *super;
-    struct sfs_entry *volume;
-    struct sfs_entry *entry_list;
-    struct sfs_entry *iter_curr;
-};
-
 struct sfs_super {
     int64_t time_stamp;
     uint64_t data_size;
@@ -41,6 +31,24 @@ struct sfs_super {
     uint64_t total_blocks;
     uint32_t rsvd_blocks;
     uint8_t block_size;
+};
+
+struct sfs_block_list {
+    uint64_t start_block;
+    uint64_t length;
+    struct sfs_entry *delfile;
+    struct sfs_block_list *next;
+};
+
+struct sfs {
+    FILE *file;
+    int block_size;
+    int del_file_count;
+    struct sfs_super *super;
+    struct sfs_entry *volume;
+    struct sfs_entry *entry_list;
+    struct sfs_block_list *free_list;
+    struct sfs_entry *iter_curr;
 };
 
 /* The Volume ID Entry Data */
@@ -306,7 +314,8 @@ struct sfs_entry *sfs_read_unusable_data(uint8_t *buf, struct sfs_entry *entry)
 }
 
 /* read entry, at current location */
-struct sfs_entry *sfs_read_entry(SFS *sfs) {
+struct sfs_entry *sfs_read_entry(SFS *sfs)
+{
 
     uint8_t buf[SFS_ENTRY_SIZE];
 
@@ -351,7 +360,8 @@ struct sfs_entry *sfs_read_volume(SFS *sfs)
     return volume;
 }
 
-struct sfs_entry *sfs_read_entries(SFS *sfs) {
+struct sfs_entry *sfs_read_entries(SFS *sfs)
+{
     int offset = sfs->block_size * sfs->super->total_blocks - sfs->super->index_size;
     printf("bs=0x%x, tt=0x%lxH, is=0x%lx, of=0x%x\n",
         sfs->block_size, sfs->super->total_blocks, sfs->super->index_size, offset);
@@ -370,7 +380,119 @@ struct sfs_entry *sfs_read_entries(SFS *sfs) {
     return head;
 }
 
-SFS *sfs_init(const char *filename) {
+struct sfs_block_list *block_list_from_entries(struct sfs_entry *entry_list)
+{
+    struct sfs_block_list *list = NULL;
+    struct sfs_entry *entry = entry_list;
+    while (entry != NULL) {
+        if ( entry->type == SFS_ENTRY_FILE
+                || entry->type == SFS_ENTRY_FILE_DEL
+                || entry->type == SFS_ENTRY_UNUSABLE) {
+            struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+            item->start_block = entry->data.unusable_data->start_block;
+            item->next = list;
+            list = item;
+            switch (entry->type) {
+            case SFS_ENTRY_FILE:
+                item->start_block = entry->data.file_data->start_block;
+                item->length = entry->data.file_data->end_block + 1 - item->start_block;
+                item->delfile = NULL;
+                break;
+            case SFS_ENTRY_UNUSABLE:
+                item->start_block = entry->data.unusable_data->start_block;
+                item->length = entry->data.unusable_data->end_block + 1 - item->start_block;
+                item->delfile = NULL;
+                break;
+            case SFS_ENTRY_FILE_DEL:
+                item->start_block = entry->data.file_data->start_block;
+                item->length = entry->data.file_data->end_block + 1 - item->start_block;
+                item->delfile = entry;
+                break;
+            }
+        }
+        entry = entry->next;
+    }
+    return list;
+}
+
+struct sfs_block_list **conquer(struct sfs_block_list **p1, struct sfs_block_list **p2, int sz)
+{
+    int i1 = 0;
+    int i2 = 0;
+    while (i1 != sz || (i2 != sz && (*p2) != NULL)) {
+        if ((i1 != sz) &&
+                (*p2 == NULL
+                 || i2 == sz
+                 || (*p1)->start_block <= (*p2)->start_block)) {
+            i1++;
+            p1 = &(*p1)->next;
+        } else {
+            i2++;
+            if (i1 != sz) {
+                struct sfs_block_list *tmp = *p2;
+                (*p2) = tmp->next;
+                tmp->next = (*p1);
+                *p1 = tmp;
+                p1 = &(*p1)->next;
+            } else {
+                p2 = &(*p2)->next;
+            }
+        }
+    }
+    return p2;  // return the tail
+}
+
+void print_block_list(char *info, struct sfs_block_list *list)
+{
+    printf("%s", info);
+    while (list != NULL) {
+        printf("(%03lx,%03lx) ", list->start_block, list->length);
+        list = list->next;
+    }
+    printf("\n");
+}
+
+void sort_block_list(struct sfs_block_list **plist)
+{
+    int sz = 1;
+    int n;
+    do {
+        n = 0;
+        struct sfs_block_list **plist1 = plist;
+        while (*plist1 != NULL) {
+            n = n + 1;
+            struct sfs_block_list **plist2 = plist1;
+            int i = 0;
+            plist2 = plist1;
+            while (i < sz && *plist2 != NULL) {
+                i++;
+                plist2 = &(*plist2)->next;
+            }
+            plist1 = conquer(plist1, plist2, sz);
+        }
+        sz = sz * 2;
+    } while (n > 1);
+}
+
+void block_list_to_free_list(struct sfs_block_list **plist)
+{
+}
+
+struct sfs_block_list *make_free_list(struct sfs_entry *entry_list)
+{
+    struct sfs_block_list *block_list = block_list_from_entries(entry_list);
+
+    print_block_list("not sorted: ", block_list);
+    sort_block_list(&block_list);
+    print_block_list("sorted:     ", block_list);
+
+    block_list_to_free_list(&block_list);
+
+    return block_list;
+}
+
+SFS *sfs_init(const char *filename)
+{
     SFS *sfs = malloc(sizeof(SFS));
     sfs->file = fopen(filename, "r");
     if (sfs->file == NULL) {
@@ -380,10 +502,12 @@ SFS *sfs_init(const char *filename) {
     }
     sfs->super = sfs_read_super(sfs);
     sfs->entry_list = sfs_read_entries(sfs);
+    sfs->free_list = make_free_list(sfs->entry_list);
     return sfs;
 }
 
-void free_entry(struct sfs_entry *entry) {
+void free_entry(struct sfs_entry *entry)
+{
     printf("freeing: %x\n", entry->type);
     switch (entry->type) {
     case SFS_ENTRY_VOL_ID:
@@ -409,8 +533,8 @@ void free_entry(struct sfs_entry *entry) {
     free(entry);
 }
 
-int sfs_terminate(SFS *sfs) {
-
+int sfs_terminate(SFS *sfs)
+{
     printf("free sfs\n");
     // free entry list
     struct sfs_entry *prev = sfs->entry_list;
@@ -430,7 +554,8 @@ int sfs_terminate(SFS *sfs) {
     return 0;
 }
 
-char *fix_name(const char *path) {
+char *fix_name(const char *path)
+{
     char *result = (char *)path;
     while (*result == '/')
         result++;
@@ -451,37 +576,56 @@ uint64_t sfs_get_file_size(SFS *sfs, const char *path)
     return 0;
 }
 
+struct sfs_entry *get_dir_by_name(SFS *sfs, char *path) {
+    struct sfs_entry *entry = sfs->entry_list;
+    while (entry != NULL) {
+        if (entry->type == SFS_ENTRY_DIR
+                && strcmp(path, (char *)entry->data.dir_data->name) == 0) {
+            return entry;
+        }
+        entry = entry->next;
+    }
+    return NULL;
+}
+
+struct sfs_entry *get_file_by_name(SFS *sfs, char *path) {
+    struct sfs_entry *entry = sfs->entry_list;
+    while (entry != NULL) {
+        if (entry->type == SFS_ENTRY_FILE
+                && strcmp(path, (char *)entry->data.file_data->name) == 0) {
+            return entry;
+        }
+        entry = entry->next;
+    }
+    return NULL;
+}
+
 int sfs_is_dir(SFS *sfs, const char *path)
 {
     char *fxpath = fix_name(path);
     printf("@@@@\tsfs_is_dir: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = sfs->entry_list;
-    while (entry != NULL) {
-        if (entry->type == SFS_ENTRY_DIR
-                && strcmp(fxpath, (char *)entry->data.dir_data->name) == 0) {
-            return 1;
-        }
-        entry = entry->next;
+    struct sfs_entry *entry = get_dir_by_name(sfs, fxpath);
+    if (entry != NULL) {
+        return 1;
+    } else {
+        return 0;
     }
-    return 0;
 }
 
 int sfs_is_file(SFS *sfs, const char *path)
 {
     char *fxpath = fix_name(path);
     printf("@@@@\tsfs_is_file: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = sfs->entry_list;
-    while (entry != NULL) {
-        if (entry->type == SFS_ENTRY_FILE
-                && strcmp(fxpath, (char *)entry->data.file_data->name) == 0) {
-            return 1;
-        }
-        entry = entry->next;
+    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+    if (entry != NULL) {
+        return 1;
+    } else {
+        return 0;
     }
-    return 0;
 }
 
-struct sfs_entry *find_entry_from(struct sfs_entry *entry, char *path) {
+struct sfs_entry *find_entry_from(struct sfs_entry *entry, char *path)
+{
     int len = strlen(path);
     while (entry != NULL) {
         if (entry->type == SFS_ENTRY_DIR) {
@@ -504,7 +648,8 @@ struct sfs_entry *find_entry_from(struct sfs_entry *entry, char *path) {
     return NULL;
 }
 
-char *get_basename(char *full_name) {
+char *get_basename(char *full_name)
+{
     char *p = full_name;
     int i = 0;
     int last_slash = -1;
@@ -517,7 +662,8 @@ char *get_basename(char *full_name) {
     return &p[last_slash + 1];
 }
 
-char *get_entry_basename(struct sfs_entry *entry) {
+char *get_entry_basename(struct sfs_entry *entry)
+{
     switch (entry->type) {
     case SFS_ENTRY_DIR:
     case SFS_ENTRY_DIR_DEL:
@@ -530,7 +676,8 @@ char *get_entry_basename(struct sfs_entry *entry) {
     }
 }
 
-char *sfs_first(SFS *sfs, const char *path) {
+char *sfs_first(SFS *sfs, const char *path)
+{
     char *fxpath = fix_name(path);
     struct sfs_entry *entry = find_entry_from(sfs->entry_list, fxpath);
     if (entry != NULL) {
@@ -541,7 +688,8 @@ char *sfs_first(SFS *sfs, const char *path) {
     return NULL;
 }
 
-char *sfs_next(SFS *sfs, const char *path) {
+char *sfs_next(SFS *sfs, const char *path)
+{
     char *fxpath = fix_name(path);
     struct sfs_entry *entry = find_entry_from(sfs->iter_curr, fxpath);
     if (entry != NULL) {
@@ -552,6 +700,30 @@ char *sfs_next(SFS *sfs, const char *path) {
     return NULL;
 }
 
+int sfs_read(SFS *sfs, const char *path, char *buf, size_t size, off_t offset)
+{
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_read: path=\"%s\", size:0x%lx, offset:0x%lx\n", fxpath, size, offset);
+    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+    if (entry != NULL) {
+        int sz;		// number of bytes to be read
+        uint64_t len = entry->data.file_data->file_len;
+        if (offset > len) {
+            return 0;
+        }
+        if (offset + size > len) {
+            sz = offset + size - len;
+        } else {
+            sz = size;
+        }
+        uint64_t data_offset = sfs->block_size * entry->data.file_data->start_block;
+        fseek(sfs->file, data_offset, SEEK_SET);
+        fread(buf, sz, 1, sfs->file);
+        return sz;
+    } else {
+        return -1;
+    }
+}
 
 /* TODO: old */
 struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs);

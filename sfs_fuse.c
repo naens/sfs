@@ -83,6 +83,14 @@ static int sfs_fuse_read(path, buf, size, offset, fi)
     struct fuse_file_info *fi;
 {
     printf("###sfs_fuse_read: '%s', size:%ld, offset:%lx\n", path, size, offset);
+
+    int sz = sfs_read(sfs, path, buf, size, offset);
+    if (sz >= 0) {
+        return sz;
+    } else {
+        return -ENOENT;
+    }
+/*
     char *filepath = "/file";
     char *filecontent = "asdflkj\n";
     if (strcmp(path, filepath) == 0) {
@@ -99,6 +107,8 @@ static int sfs_fuse_read(path, buf, size, offset, fi)
         return size;
     }
     return -ENOENT;
+*/
+
 }
 
 static int sfs_fuse_readdir(path, buf, filler, offset, fi)
