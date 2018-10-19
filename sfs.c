@@ -446,7 +446,8 @@ void print_block_list(char *info, struct sfs_block_list *list)
 {
     printf("%s", info);
     while (list != NULL) {
-        printf("(%03lx,%03lx) ", list->start_block, list->length);
+        char *d = list->delfile == NULL ? "" : "d";
+        printf("(%s%03lx,%03lx) ", d, list->start_block, list->length);
         list = list->next;
     }
     printf("\n");
@@ -474,19 +475,87 @@ void sort_block_list(struct sfs_block_list **plist)
     } while (n > 1);
 }
 
-void block_list_to_free_list(struct sfs_block_list **plist)
+void block_list_to_free_list(plist, first_block, total_blocks)
+    struct sfs_block_list **plist;
+    uint64_t first_block;
+    uint64_t total_blocks;
 {
+    if (*plist == NULL) {
+        uint64_t gap = total_blocks - first_block;
+        struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+        item->start_block = first_block;
+        item->length = gap;
+        item->delfile = NULL;
+        item->next = NULL;
+        *plist = item;
+        return;
+    }
+
+    /* if gap before the first block, insert one block structure */
+    struct sfs_block_list **pprev;
+    struct sfs_block_list *curr;
+    if (first_block < (*plist)->start_block) {
+        struct sfs_block_list *b0 = malloc(sizeof(struct sfs_block_list));
+        b0->start_block = first_block;
+        b0->length = (*plist)->start_block - first_block;
+        b0->next =  (*plist);
+        b0->delfile = NULL;
+        *plist = b0;
+        pprev = &(*plist)->next;
+    } else {
+        pprev = plist;
+    }
+    curr = (*pprev)->next;
+
+    while ((*pprev) != NULL) {
+        uint64_t prev_end = (*pprev)->start_block + (*pprev)->length;
+        uint64_t gap = (curr != 0 ? curr->start_block : total_blocks) - prev_end;
+        if ((*pprev)->delfile == NULL) {
+            if (gap == 0) {
+                struct sfs_block_list *tmp = (*pprev);
+                *pprev = tmp->next;
+                free(tmp);
+            } else {
+                (*pprev)->start_block += (*pprev)->length;
+                (*pprev)->length = gap;
+                pprev = &(*pprev)->next;
+            }
+        } else {
+            if (gap > 0) {
+                struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+                item->start_block = (*pprev)->start_block + (*pprev)->length;
+                item->length = gap;
+                item->next = curr;
+                item->delfile = NULL;
+                (*pprev)->next = item;
+                pprev = &item->next;
+            } else {
+                pprev = &(*pprev)->next;
+            }
+        }
+        if (curr != NULL) {
+            curr = curr->next;
+        }
+    }
 }
 
-struct sfs_block_list *make_free_list(struct sfs_entry *entry_list)
+struct sfs_block_list *make_free_list(struct sfs_super *super, struct sfs_entry *entry_list)
 {
     struct sfs_block_list *block_list = block_list_from_entries(entry_list);
-
     print_block_list("not sorted: ", block_list);
+
     sort_block_list(&block_list);
     print_block_list("sorted:     ", block_list);
 
-    block_list_to_free_list(&block_list);
+/*
+    uint64_t data_size;
+    uint64_t total_blocks;
+    uint32_t rsvd_blocks;
+*/
+    uint64_t first_block = super->rsvd_blocks;  // !! includes the superblock
+    uint64_t data_blocks = super->total_blocks;
+    block_list_to_free_list(&block_list, first_block, data_blocks);
+    print_block_list("free:     ", block_list);
 
     return block_list;
 }
@@ -502,7 +571,7 @@ SFS *sfs_init(const char *filename)
     }
     sfs->super = sfs_read_super(sfs);
     sfs->entry_list = sfs_read_entries(sfs);
-    sfs->free_list = make_free_list(sfs->entry_list);
+    sfs->free_list = make_free_list(sfs->super, sfs->entry_list);
     return sfs;
 }
 
@@ -533,11 +602,9 @@ void free_entry(struct sfs_entry *entry)
     free(entry);
 }
 
-int sfs_terminate(SFS *sfs)
+void free_entry_list(struct sfs_entry *entry_list)
 {
-    printf("free sfs\n");
-    // free entry list
-    struct sfs_entry *prev = sfs->entry_list;
+    struct sfs_entry *prev = entry_list;
     struct sfs_entry *curr = prev->next;
     while (curr != NULL) {
         free_entry(prev);
@@ -545,9 +612,26 @@ int sfs_terminate(SFS *sfs)
         curr = curr->next;
     }
     free_entry(prev);
+}
 
-    /* TODO: free block list */
+void free_free_list(struct sfs_block_list *free_list)
+{
+    struct sfs_block_list *prev = free_list;
+    struct sfs_block_list *curr = prev->next;
+    while (curr != NULL) {
+        free(prev);
+        prev = curr;
+        curr = curr->next;
+    }
+    free(prev);
+}
 
+int sfs_terminate(SFS *sfs)
+{
+    printf("free sfs\n");
+    // free entry list
+    free_entry_list(sfs->entry_list);
+    free_free_list(sfs->free_list);
     free(sfs->super);
     fclose(sfs->file);
     free(sfs);
