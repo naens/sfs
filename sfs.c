@@ -486,37 +486,45 @@ struct sfs_entry *find_entry_from(struct sfs_entry *entry, char *path) {
     while (entry != NULL) {
         if (entry->type == SFS_ENTRY_DIR) {
             char *name = (char *)entry->data.dir_data->name;
-            printf("[path=%s]dirname=%s\n", path, name);
             int name_len = strlen(name);
             if ((len == 0 || (name_len > len + 1 && name[len] == '/'))
                     && strncmp(path, name, len) == 0 && strchr(&name[len+1], '/') == NULL) {
-                printf("OK!\n");
                 return entry;
             }
         } else if (entry->type == SFS_ENTRY_FILE) {
             char *name = (char *)entry->data.file_data->name;
-            printf("[path=%s]filename=%s\n", path, name);
             int name_len = strlen(name);
             if ((len == 0 || (name_len > len + 1 && name[len] == '/'))
                     && strncmp(path, name, len) == 0 && strchr(&name[len+1], '/') == NULL) {
-                printf("OK!\n");
                 return entry;
             }
         }
         entry = entry->next;
     }
-    printf("<<<<END OF ENTRIES>>>>\n");
     return NULL;
 }
 
-char *get_entry_name(struct sfs_entry *entry) {
+char *get_basename(char *full_name) {
+    char *p = full_name;
+    int i = 0;
+    int last_slash = -1;
+    while (p[i] != 0) {
+        if (p[i] == '/') {
+            last_slash = i;
+        }
+        i = i + 1;
+    }
+    return &p[last_slash + 1];
+}
+
+char *get_entry_basename(struct sfs_entry *entry) {
     switch (entry->type) {
     case SFS_ENTRY_DIR:
     case SFS_ENTRY_DIR_DEL:
-        return (char*)entry->data.dir_data->name;
+        return get_basename((char*)entry->data.dir_data->name);
     case SFS_ENTRY_FILE:
     case SFS_ENTRY_FILE_DEL:
-        return (char*)entry->data.file_data->name;
+        return get_basename((char*)entry->data.file_data->name);
     default:
         return NULL;
     }
@@ -524,13 +532,10 @@ char *get_entry_name(struct sfs_entry *entry) {
 
 char *sfs_first(SFS *sfs, const char *path) {
     char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_first: name=\"%s\"\n", fxpath);
     struct sfs_entry *entry = find_entry_from(sfs->entry_list, fxpath);
     if (entry != NULL) {
         sfs->iter_curr = entry->next;
-//        printf("found: %s\n", get_entry_name(entry));
-        printf("\n");
-        return get_entry_name(entry);
+        return get_entry_basename(entry);
     }
     sfs->iter_curr = NULL;
     return NULL;
@@ -538,13 +543,10 @@ char *sfs_first(SFS *sfs, const char *path) {
 
 char *sfs_next(SFS *sfs, const char *path) {
     char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_next: name=\"%s\"\n", fxpath);
     struct sfs_entry *entry = find_entry_from(sfs->iter_curr, fxpath);
     if (entry != NULL) {
         sfs->iter_curr = entry->next;
-//        printf("found: %s\n", get_entry_name(entry));
-        printf("\n");
-        return get_entry_name(entry);
+        return get_entry_basename(entry);
     }
     sfs->iter_curr = NULL;
     return NULL;

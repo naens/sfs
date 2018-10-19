@@ -112,16 +112,12 @@ static int sfs_fuse_readdir(path, buf, filler, offset, fi)
     filler(buf, ".", NULL, 0, 0);
     filler(buf, "..", NULL, 0, 0);
     char *name = sfs_first(sfs, path);
-    int n = 1;
     while (name != NULL) {
-        printf("adding: '%s'\n", name);
-        if (filler(buf, name, NULL, n++, 0) == 1) {
+        printf("\tadding: '%s'\n", name);
+        if (filler(buf, name, NULL, 0, 0) == 1) {
             printf("buffer full\n");
         }
         name = sfs_next(sfs, path);
-        if (name != NULL) {
-            printf("-> found name \"%s\"\n", name);
-        }
     }
     return 0;
 }
