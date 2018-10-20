@@ -68,7 +68,7 @@ static int sfs_fuse_getattr(const char *path, struct stat *stbuf, struct fuse_fi
         stbuf->st_mode = S_IFREG | 0644;
         stbuf->st_nlink = 1;
         stbuf->st_size = sfs_get_file_size(sfs, path);
-        printf("\t=> size = %ld\n", stbuf->st_size);
+        printf("\t=> size = 0x%lx\n", stbuf->st_size);
         return 0;
     }
 
@@ -82,7 +82,7 @@ static int sfs_fuse_read(path, buf, size, offset, fi)
     off_t offset;
     struct fuse_file_info *fi;
 {
-    printf("###sfs_fuse_read: '%s', size:%ld, offset:%lx\n", path, size, offset);
+    printf("###sfs_fuse_read: '%s', size: 0x%lx, offset: 0x%lx\n", path, size, offset);
 
     int sz = sfs_read(sfs, path, buf, size, offset);
     if (sz >= 0) {
@@ -90,25 +90,6 @@ static int sfs_fuse_read(path, buf, size, offset, fi)
     } else {
         return -ENOENT;
     }
-/*
-    char *filepath = "/file";
-    char *filecontent = "asdflkj\n";
-    if (strcmp(path, filepath) == 0) {
-        size_t len = strlen(filecontent);
-        if (offset >= strlen(filecontent))
-            return 0;
-
-        if (offset + size > len) {
-            memcpy(buf, filecontent + offset, len - offset);
-            return len - offset;
-        }
-
-        memcpy(buf, filecontent + offset, size);
-        return size;
-    }
-    return -ENOENT;
-*/
-
 }
 
 static int sfs_fuse_readdir(path, buf, filler, offset, fi)
