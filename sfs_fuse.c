@@ -113,12 +113,36 @@ static int sfs_fuse_readdir(path, buf, filler, offset, fi)
     return 0;
 }
 
+static int sfs_fuse_mkdir(const char *path, mode_t mode)
+{
+    printf("###sfs_fuse_mkdir \"%s\"\n", path);
+    int result = sfs_mkdir(sfs, path);
+    if (result == 0) {
+        return 0;
+    } else {
+        return -EACCES;
+    }
+}
+
+static int sfs_fuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+    printf("###sfs_fuse_create \"%s\"\n", path);
+    int result = sfs_create(sfs, path);
+    if (result == 0) {
+        return 0;
+    } else {
+        return -EACCES;
+    }
+}
+
 static struct fuse_operations fuse_operations = {
     .init = sfs_fuse_init,
     .destroy = sfs_fuse_destroy,
     .getattr = sfs_fuse_getattr,
     .read = sfs_fuse_read,
-    .readdir = sfs_fuse_readdir
+    .readdir = sfs_fuse_readdir,
+    .mkdir = sfs_fuse_mkdir,
+    .create = sfs_fuse_create
 };
 
 static void show_help(const char *progname)

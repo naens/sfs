@@ -19,3 +19,7 @@ char *sfs_first(SFS *sfs, const char *path);
 char *sfs_next(SFS *sfs, const char *path);
 
 int sfs_read(SFS *sfs, const char *path, char *buf, size_t size, off_t offset);
+
+int sfs_mkdir(SFS *sfs, const char *path);
+
+int sfs_create(SFS *sfs, const char *path);

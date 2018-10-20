@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Werror -Wfatal-errors -g -O0 -Wall
+CFLAGS=-Werror -Wfatal-errors -g -O0 -Wall -lm
 FUSEFLAGS=$(shell pkg-config fuse3 --cflags --libs)
 
 all: sfs_fuse sfs_tool
