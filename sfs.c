@@ -687,7 +687,7 @@ struct sfs_entry *get_file_by_name(SFS *sfs, char *path) {
 int sfs_is_dir(SFS *sfs, const char *path)
 {
     char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_is_dir: name=\"%s\"\n", fxpath);
+//    printf("@@@@\tsfs_is_dir: name=\"%s\"\n", fxpath);
     struct sfs_entry *entry = get_dir_by_name(sfs, fxpath);
     if (entry != NULL) {
         return 1;
@@ -699,7 +699,7 @@ int sfs_is_dir(SFS *sfs, const char *path)
 int sfs_is_file(SFS *sfs, const char *path)
 {
     char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_is_file: name=\"%s\"\n", fxpath);
+//    printf("@@@@\tsfs_is_file: name=\"%s\"\n", fxpath);
     struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
     if (entry != NULL) {
         return 1;
@@ -787,42 +787,35 @@ char *sfs_next(SFS *sfs, const char *path)
 int sfs_read(SFS *sfs, const char *path, char *buf, size_t size, off_t offset)
 {
     char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_read: path=\"%s\", size:0x%lx, offset:0x%lx\n", fxpath, size, offset);
+//    printf("@@@@\tsfs_read: path=\"%s\", size:0x%lx, offset:0x%lx\n", fxpath, size, offset);
     struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
     if (entry != NULL) {
-        int sz;		// number of bytes to be read
+        uint64_t sz;		// number of bytes to be read
         uint64_t len = entry->data.file_data->file_len;
         if (offset > len) {
             return 0;
         }
         if (offset + size > len) {
-            sz = offset + size - len;
+            sz = len - offset;
         } else {
             sz = size;
         }
         uint64_t data_offset = sfs->block_size * entry->data.file_data->start_block;
-        fseek(sfs->file, data_offset, SEEK_SET);
+        uint64_t read_from = data_offset + offset;
+/*
+        printf("\tstart:\t0x%06lx\n", data_offset);
+        printf("\tend:\t0x%06lx\n", data_offset + len);
+        printf("\tfilesz:\t0x%06lx\n", len);
+        printf("\tfrom:\t0x%06lx\n", read_from);
+        printf("\tto:\t0x%06lx\n", read_from + sz);
+        printf("\treadsz:\t0x%06lx\n", sz);
+*/
+        fseek(sfs->file, read_from, SEEK_SET);
         fread(buf, sz, 1, sfs->file);
         return sz;
     } else {
         return -1;
     }
-}
-
-/* TODO: old */
-struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs);
-struct S_SFS_VOL_ID *sfs_get_volume(struct sfs *sfs)
-{
-/*
-    struct sfs_entry_list *list= sfs_get_entry_list(sfs);
-    while (list != NULL && list->type != SFS_ENTRY_VOL_ID)
-        list = list->next;
-    if (list != NULL)
-        return list->entry.volume;
-    else
-*/
-        return NULL;
-
 }
 
 /* TODO: old */
