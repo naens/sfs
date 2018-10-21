@@ -95,30 +95,6 @@ struct sfs_entry {
     struct sfs_entry *next;
 };
 
-/* TODO: old */
-union entry {
-    struct S_SFS_VOL_ID *volume;
-    struct S_SFS_START *start;
-    struct S_SFS_UNUSED *unused;
-    struct S_SFS_DIR *dir;
-    struct S_SFS_FILE *file;
-    struct S_SFS_UNUSABLE *unusable;
-    void *null;
-};
-
-/* TODO: old */
-struct sfs_entry_list {
-    uint8_t type;
-    union entry entry;
-    struct sfs_entry_list *next;
-};
-
-/* TODO: old */
-struct sfs_del_file_list {
-    struct S_SFS_FILE *file;
-    struct sfs_del_file_list *next;
-};
-
 /* The Volume ID Entry */
 struct sfs_volume {
     uint8_t type;
@@ -642,7 +618,7 @@ SFS *sfs_init(const char *filename)
 
 void free_entry(struct sfs_entry *entry)
 {
-    printf("freeing: %x\n", entry->type);
+//    printf("freeing: %x\n", entry->type);
     switch (entry->type) {
     case SFS_ENTRY_VOL_ID:
         free(entry->data.volume_data->name);
@@ -693,8 +669,6 @@ void free_free_list(struct sfs_block_list *free_list)
 
 int sfs_terminate(SFS *sfs)
 {
-    printf("free sfs\n");
-    // free entry list
     free_entry_list(sfs->entry_list);
     free_free_list(sfs->free_list);
     free(sfs->super);
@@ -1000,11 +974,33 @@ int write_entry(SFS *sfs, struct sfs_entry *entry)
     return 0;
 }
 
-void delete_entries(struct sfs_entry *from, struct sfs_entry *to)
+struct sfs_block_list **find_delfile(pfree_list, delfile)
+    struct sfs_block_list **pfree_list;
+    struct sfs_entry *delfile;
 {
-    while (from != to) {
-        struct sfs_entry *tmp = from;
-        from = from->next;
+    struct sfs_block_list **pfree = pfree_list;
+    while (*pfree != NULL && (*pfree)->delfile != delfile) {
+        pfree = &(*pfree)->next;
+    }
+    return pfree;
+}
+
+void delete_entries(pfree_list, from, to)
+    struct sfs_block_list **pfree_list;
+    struct sfs_entry *from;
+    struct sfs_entry *to;
+{
+    struct sfs_block_list **p_free_item = pfree_list;
+    struct sfs_entry *p_entry = from;
+    while (p_entry != to) {
+        if (p_entry->type == SFS_ENTRY_FILE_DEL) {
+            p_free_item = find_delfile(p_free_item, p_entry); //if not exist => error
+            struct sfs_block_list *item_to_delete = *p_free_item;
+            p_free_item = &(*p_free_item)->next;
+            free(item_to_delete);
+        }
+        struct sfs_entry *tmp = p_entry;
+        p_entry = p_entry->next;
         free_entry(tmp);
     }
 }
@@ -1028,7 +1024,7 @@ struct sfs_entry *insert_unused(sfs, offset, n, tail)
         }
         next = entry;
     }
-    return entry;
+    return next;
 }
 
 /* Finds space for the entry and inserts it.
@@ -1042,40 +1038,45 @@ struct sfs_entry *insert_unused(sfs, offset, n, tail)
  * The remaining (l - k) is filled with unused entries.
  * If the space could not be found, -1 is returned, otherwise 0 is returned.
  */
-int insert_entry(struct sfs *sfs, struct sfs_entry *entry_list, struct sfs_entry *new_entry)
+int insert_entry(struct sfs *sfs, struct sfs_entry *new_entry)
 {
     printf("=== INSERT ENTRY ===\n");
     int space_needed = 1 + get_num_cont(new_entry); // in number of simple entries
     printf("\tneeded: %d\n", space_needed);
     int space_found = 0;
-    struct sfs_entry *curr_entry = entry_list;
-    struct sfs_entry *first_usable = NULL;
-    while (curr_entry != NULL) {
+    struct sfs_entry **p_entry = &sfs->entry_list;
+    struct sfs_entry **pfirst_usable = NULL;
+    while (*p_entry != NULL) {
 //        printf("\ttype=0x%02x\n", curr_entry->type);
-        int usable_space = get_entry_usable_space(curr_entry);
+        int usable_space = get_entry_usable_space(*p_entry);
 //        printf("\tusable: %d\n", usable_space);
         if (usable_space > 0) {
-            if (first_usable == NULL) {
-                first_usable = curr_entry;
+            if (pfirst_usable == NULL) {
+                pfirst_usable = p_entry;
                 space_found += usable_space;
                 printf("\tfound: %d\n", space_found);
             }
             if (space_found >= space_needed) {
-                int start = first_usable->offset;
+                int start = (*pfirst_usable)->offset;
                 int end = start + SFS_ENTRY_SIZE * space_needed;
-                struct sfs_entry *next = curr_entry->next;
-                delete_entries(first_usable, next);
+                struct sfs_entry *next = (*p_entry)->next;
+                delete_entries(&sfs->free_list, *pfirst_usable, next);
                 new_entry->offset = start;
                 int l = space_found - space_needed;
                 new_entry->next = insert_unused(sfs, end, l, next);
+                *pfirst_usable = new_entry;
                 printf("=== INSERT ENTRY: OK ===\n");
-                return 0;
+                if (write_entry(sfs, new_entry) != 0) {
+                    return -1;
+                } else {
+                    return 0;
+                }
             }
-        } else if (first_usable != NULL) {
-            first_usable = NULL;
+        } else if (pfirst_usable != NULL) {
+            pfirst_usable = NULL;
             space_found = 0;
         }
-        curr_entry = curr_entry->next;
+        p_entry = &(*p_entry)->next;
     }
     printf("insert_entry: couldn't find (%d * 64) bytes\n", space_needed);
     printf("=== INSERT ENTRY: ERROR ===\n");
@@ -1090,16 +1091,40 @@ int insert_entry(struct sfs *sfs, struct sfs_entry *entry_list, struct sfs_entry
  */
 int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
 {
+    printf("=== PREPEND ENTRY ===\n");
     struct sfs_entry *start = sfs->entry_list;
-    int entry_size = SFS_ENTRY_SIZE * (1 + get_num_cont(entry));
-    int start_size = SFS_ENTRY_SIZE * (1 + get_num_cont(start));
+    uint64_t entry_size = SFS_ENTRY_SIZE * (1 + get_num_cont(entry));
+    uint64_t start_size = SFS_ENTRY_SIZE * (1 + get_num_cont(start));
 
     /* check available space in the free area and update free list */
-    if (sfs->free_last == NULL) printf("free_last is NULL!!!\n");
+    if (sfs->free_last == NULL) {
+        printf("free_last is NULL!!!\n");
+        return -1;
+    }
 
     if (sfs->free_last != NULL  && sfs->free_last->length >= entry_size) {
-        sfs->free_last -= entry_size;
-        sfs->super->index_size += entry_size;
+        uint64_t new_isz = sfs->super->index_size + entry_size;
+        uint64_t iblk_rest = (sfs->block_size - sfs->super->index_size) % sfs->block_size;
+        uint64_t ibt = sfs->super->index_size + iblk_rest; // index with rest in bytes
+        uint64_t fbt = sfs->free_last->length * sfs->block_size; // free blocks in bytes
+        printf("\tblock size: 0x%06x\n", sfs->block_size);
+        printf("\toriginal index size: 0x%06lx\n", sfs->super->index_size);
+        printf("\toriginal free blocks: 0x%06lx\n", sfs->free_last->length);
+        printf("\tindex blocks (bytes): 0x%06lx\n", ibt);
+        printf("\tfree blocks (bytes): 0x%06lx\n", fbt);
+        printf("\tentry size: 0x%06lx\n", entry_size);
+        printf("\tnew index size: 0x%06lx\n", new_isz);
+        if (new_isz > ibt) {
+            // update free list
+            if (new_isz - ibt > fbt) {
+                fprintf(stderr, "Error: could not prepend entry: no more free space\n");
+                return -1;
+            }
+            sfs->free_last->length -= (new_isz - ibt + sfs->block_size - 1) / sfs->block_size;
+            printf("\tupdate free_last: 0x%06lx\n", sfs->free_last->length);
+        }
+        sfs->super->index_size = new_isz;
+        printf("\tupdate index size: 0x%06lx\n", new_isz);
         sfs_write_super(sfs->file, sfs->super);
     } else {
         fprintf(stderr, "prepend_entry: free list error\n");
@@ -1120,6 +1145,7 @@ int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
     // update pointers only if write successful
     entry->next = start->next;
     start->next = entry;
+    printf("=== PREPEND: OK! ===\n");
     return 0;
 }
 
@@ -1132,7 +1158,7 @@ int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
  */
 int put_new_entry(struct sfs *sfs, struct sfs_entry *new_entry)
 {
-    if (insert_entry(sfs, sfs->entry_list, new_entry) != 0) {
+    if (insert_entry(sfs, new_entry) != 0) {
         return prepend_entry(sfs, new_entry);
     }
     return 0;
@@ -1238,320 +1264,42 @@ int sfs_create(struct sfs *sfs, const char *path)
     return 0;
 }
 
-/* TODO: old */
-struct S_SFS_UNUSED *make_unused_entry(uint8_t *buf)
-{
-    struct S_SFS_UNUSED *unused = malloc(sizeof(struct S_SFS_UNUSED));
-    uint8_t *cbuf = buf;
-    memcpy(&unused->type, cbuf, sizeof(unused->type));
-    cbuf += sizeof(unused->type);
-    memcpy(&unused->crc, cbuf, sizeof(unused->crc));
-    cbuf += sizeof(unused->crc);
-    memcpy(&unused->resvd, cbuf, sizeof(unused->resvd));
-    if (!check_crc(buf, 64)) {
-        return NULL;
-    }    
-    return unused;    
-}
-
-/* TODO: old */
-uint8_t *rw_cont_name(int init_len, uint8_t *init_buf, FILE *f, int n_cont)
-{
-    uint8_t *name = malloc(init_len + 64 * n_cont);
-    memcpy(name, init_buf, init_len);
-    uint8_t *p = name;
-    uint8_t buf[64];
-    for (int i = 0; i < n_cont; i++) {
-        fread(buf, 64, 1, f);
-        memcpy(p, buf, 64);
-        p += 64;
-        i++;
+int sfs_is_dir_empty(struct sfs *sfs, char *path) {
+    struct sfs_entry *entry = sfs->entry_list;
+    int path_len = strlen(path);
+    while (entry != NULL) {
+        if (entry->type == SFS_ENTRY_DIR
+                && strncmp(path, entry->data.dir_data->name, path_len) == 0
+                && entry->data.dir_data->name[path_len] == '/') {
+            return 0;
+        }
+        entry = entry->next;
     }
-    return name;
+    return 1;
 }
 
-/* TODO: old */
-struct S_SFS_DIR *make_dir_entry(uint8_t *buf, FILE *f)
+int sfs_rmdir(struct sfs *sfs, const char *path)
 {
-    struct S_SFS_DIR *dir = malloc(sizeof(struct S_SFS_DIR));
-    uint8_t *cbuf = buf;
-    memcpy(&dir->type, cbuf, sizeof(dir->type));
-    cbuf += sizeof(dir->type);
-    memcpy(&dir->crc, cbuf, sizeof(dir->crc));
-    cbuf += sizeof(dir->crc);
-    memcpy(&dir->num_cont, cbuf, sizeof(dir->num_cont));
-    cbuf += sizeof(dir->num_cont);
-    memcpy(&dir->time_stamp, cbuf, sizeof(dir->time_stamp));
-    cbuf += sizeof(dir->time_stamp);
-    dir->name = rw_cont_name(SFS_DIR_NAME_LEN, cbuf, f, dir->num_cont);
-    if (!check_crc(buf, 64 * (1 + dir->num_cont))) {
-        return NULL;
-    }    
-    return dir;    
-}
-
-/* TODO: old */
-struct S_SFS_FILE *make_file_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
-{
-    struct S_SFS_FILE *f_entry = malloc(sizeof(struct S_SFS_FILE));
-    uint8_t *cbuf = buf;
-    memcpy(&f_entry->type, cbuf, sizeof(f_entry->type));
-    cbuf += sizeof(f_entry->type);
-    memcpy(&f_entry->crc, cbuf, sizeof(f_entry->crc));
-    cbuf += sizeof(f_entry->crc);
-    memcpy(&f_entry->num_cont, cbuf, sizeof(f_entry->num_cont));
-    cbuf += sizeof(f_entry->num_cont);
-    memcpy(&f_entry->time_stamp, cbuf, sizeof(f_entry->time_stamp));
-    cbuf += sizeof(f_entry->time_stamp);
-    memcpy(&f_entry->start_block, cbuf, sizeof(f_entry->start_block));
-    cbuf += sizeof(f_entry->start_block);
-    memcpy(&f_entry->end_block, cbuf, sizeof(f_entry->end_block));
-    cbuf += sizeof(f_entry->end_block);
-    memcpy(&f_entry->file_len, cbuf, sizeof(f_entry->file_len));
-    cbuf += sizeof(f_entry->file_len);
-    f_entry->file = NULL;
-    f_entry->file_buf = NULL;
-    f_entry->sfs = sfs;
-    f_entry->name = rw_cont_name(SFS_FILE_NAME_LEN, cbuf, f, f_entry->num_cont);
-    if (!check_crc(buf, 64 * (1 + f_entry->num_cont))) {
-        return NULL;
-    }
-    f_entry->del_number = 0;
-    return f_entry;    
-}
-
-/* TODO: old */
-struct S_SFS_UNUSABLE *make_unusable_entry(uint8_t *buf)
-{
-    struct S_SFS_UNUSABLE *unusable = malloc(sizeof(struct S_SFS_UNUSABLE));
-    uint8_t *cbuf = buf;
-    memcpy(&unusable->type, cbuf, sizeof(unusable->type));
-    cbuf += sizeof(unusable->type);
-    memcpy(&unusable->crc, cbuf, sizeof(unusable->crc));
-    cbuf += sizeof(unusable->crc);
-    memcpy(&unusable->resv0, cbuf, sizeof(unusable->resv0));
-    cbuf += sizeof(unusable->resv0);
-    memcpy(&unusable->start_block, cbuf, sizeof(unusable->start_block));
-    cbuf += sizeof(unusable->start_block);
-    memcpy(&unusable->end_block, cbuf, sizeof(unusable->end_block));
-    cbuf += sizeof(unusable->end_block);
-    memcpy(&unusable->resv1, cbuf, sizeof(unusable->resv1));
-    if (!check_crc(buf, 64)) {
-        return NULL;
-    }    
-    return unusable;    
-}
-
-/* TODO: old */
-struct S_SFS_DIR *make_dir_del_entry(uint8_t *buf, FILE *f)
-{
-    struct S_SFS_DIR *dir = malloc(sizeof(struct S_SFS_DIR));
-    uint8_t *cbuf = buf;
-    memcpy(&dir->type, cbuf, sizeof(dir->type));
-    cbuf += sizeof(dir->type);
-    memcpy(&dir->crc, cbuf, sizeof(dir->crc));
-    cbuf += sizeof(dir->crc);
-    memcpy(&dir->num_cont, cbuf, sizeof(dir->num_cont));
-    cbuf += sizeof(dir->num_cont);
-    memcpy(&dir->time_stamp, cbuf, sizeof(dir->time_stamp));
-    cbuf += sizeof(dir->time_stamp);
-    dir->name = rw_cont_name(SFS_DIR_NAME_LEN, cbuf, f, dir->num_cont);
-    if (!check_crc(buf, 64 * (1 + dir->num_cont))) {
-        return NULL;
-    }    
-    return dir;    
-}
-
-
-/* TODO: old */
-void sfs_del_file(struct S_SFS_FILE *sfs_file);
-struct S_SFS_FILE *make_file_del_entry(struct sfs *sfs, uint8_t *buf, FILE *f)
-{
-    struct S_SFS_FILE *f_entry = malloc(sizeof(struct S_SFS_FILE));
-    uint8_t *cbuf = buf;
-    memcpy(&f_entry->type, cbuf, sizeof(f_entry->type));
-    cbuf += sizeof(f_entry->type);
-    memcpy(&f_entry->crc, cbuf, sizeof(f_entry->crc));
-    cbuf += sizeof(f_entry->crc);
-    memcpy(&f_entry->num_cont, cbuf, sizeof(f_entry->num_cont));
-    cbuf += sizeof(f_entry->num_cont);
-    memcpy(&f_entry->time_stamp, cbuf, sizeof(f_entry->time_stamp));
-    cbuf += sizeof(f_entry->time_stamp);
-    memcpy(&f_entry->start_block, cbuf, sizeof(f_entry->start_block));
-    cbuf += sizeof(f_entry->start_block);
-    memcpy(&f_entry->end_block, cbuf, sizeof(f_entry->end_block));
-    cbuf += sizeof(f_entry->end_block);
-    memcpy(&f_entry->file_len, cbuf, sizeof(f_entry->file_len));
-    cbuf += sizeof(f_entry->file_len);
-    f_entry->file = NULL;
-    f_entry->file_buf = NULL;
-    f_entry->sfs = sfs;
-    f_entry->name = rw_cont_name(SFS_FILE_NAME_LEN, cbuf, f, f_entry->num_cont);
-    if (!check_crc(buf, 64 * (1 + f_entry->num_cont))) {
-        return NULL;
-    }
-//    sfs_del_file(f_entry); /* this file is deleted! */
-    return f_entry;    
-}
-
-/* TODO: old */
-int get_entry_start(struct sfs_entry_list *list)
-{
-    switch (list->type) {
-/*
-    case SFS_ENTRY_FILE:
-        return list->entry.file->start_block;
-    case SFS_ENTRY_UNUSABLE:
-        return list->entry.unusable->start_block;
-    case SFS_ENTRY_FILE_DEL:
-        return list->entry.file->start_block;
-*/
-    default:
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_rmdir: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = get_dir_by_name(sfs, fxpath);
+    if (entry == NULL) {
+        fprintf(stderr, "no directory \"%s\" exists\n", fxpath);
         return -1;
     }
-}
-
-/* TODO: old */
-struct sfs_entry_list *sfs_get_entry_list(struct sfs *sfs)
-{
-/*
-    if (sfs->entry_list != NULL)
-        return sfs->entry_list;
-*/
-    /* find location of entries */
-
-    int n_entries = sfs->super->index_size / 64;
-    if (fseek(sfs->file, -(64 * n_entries), SEEK_END) != 0) {
-        fprintf(stderr, "fseek error\n");
-        return NULL;
+    if (!sfs_is_dir_empty(sfs, fxpath)) {
+        fprintf(stderr, "directory \"%s\" is not empty\n", fxpath);
+        return -1;
     }
-
-/*
-    union entry entry = make_entry(sfs, sfs->file);
-    while (entry.null != NULL) {
-        int type = ((uint8_t*)entry.null)[0];
-        if (type == SFS_ENTRY_FILE || type == SFS_ENTRY_UNUSABLE
-          || type == SFS_ENTRY_FILE_DEL)
-        {
-            struct sfs_entry_list *list = malloc(sizeof(struct sfs_entry_list));
-            list->entry = entry;
-            list->type = type;
-            insert_entry(&sfs->entry_list, list);
-        }
-        if (type == SFS_ENTRY_VOL_ID)
-            break;
-        if (feof(sfs->file))
-            break;
-        entry = make_entry(sfs, sfs->file);
+    /* Deleted children: do not remove, unreachable
+     * If the parent is deleted, the children cannot be restored
+     * => on restore: check that the parent exists
+     */
+    entry->type = SFS_ENTRY_DIR_DEL;
+    if (write_entry(sfs, entry) == 0) {
+        printf("\trmdir(%s): ok\n", fxpath);
+        return 0;
+    } else {
+        return -1;
     }
-*/
-    /* TODO: fill gaps in entry list with free entries */
-//    return sfs->entry_list;
-    return NULL;
-}
-
-/* TODO: old */
-void sfs_terminate_old(struct sfs *sfs)
-{
-/*
-    if (sfs->entry_list != NULL) {
-        struct sfs_entry_list *entry_list = sfs->entry_list;
-        struct sfs_entry_list *old;
-        while (entry_list != NULL) {
-            union entry entry = entry_list->entry;
-            switch (entry_list->type) {
-                case SFS_ENTRY_DIR:
-                    free(entry.dir->name);
-                    break;
-                case SFS_ENTRY_FILE:
-                    free(entry.file->name);
-                    break;
-                case SFS_ENTRY_DIR_DEL:
-                    free(entry.dir->name);
-                    break;
-                case SFS_ENTRY_FILE_DEL:
-                    free(entry.file->name);
-                    break;
-            }
-            free(entry_list->entry.null);
-            old = entry_list;
-            entry_list = entry_list->next;
-            free(old);
-        }
-    }
-    if (sfs->super != NULL) {
-        free(sfs->super);
-    }
-    if (sfs->file != NULL) {
-        fclose(sfs->file);
-    }
-    free(sfs);
-*/
-}
-
-/* TODO: old */
-FILE* sfs_open_file(struct S_SFS_FILE *sfs_file)
-{
-    FILE *f = sfs_file->sfs->file;
-    int bs = sfs_file->sfs->block_size;
-
-    sfs_file->file_buf = malloc(sfs_file->file_len);
-
-    /* read file contents to file_buf */
-    fseek(f, sfs_file->start_block * bs, SEEK_SET);
-    fread(sfs_file->file_buf, 1, sfs_file->file_len, f);
-
-    sfs_file->file = fmemopen(sfs_file->file_buf, sfs_file->file_len, "r");
-    if (sfs_file->file == NULL) {
-        fprintf(stderr, "\nERROR: open_memstream \"%s\"\n", strerror(errno));
-        return NULL;
-    }
-    return sfs_file->file;
-}
-
-/* TODO: old */
-void sfs_close_file(struct S_SFS_FILE *sfs_file)
-{
-    fclose(sfs_file->file);
-    sfs_file->file = NULL;
-    free(sfs_file->file_buf);
-    sfs_file->file_buf = NULL;
-}
-
-/* TODO: old */
-void sfs_write_entries(struct sfs *sfs)
-{
-    /* TODO */
-}
-
-/* TODO: old */
-/* write buffer to new file */
-struct S_SFS_FILE *sfs_write_file(struct sfs *sfs, char *name,
-    char *buf, int *sz)
-{
-    /* TODO: find place to write */
-    /* TODO: delete/resize entries */
-    /* TODO: write file to blocks */
-
-    /* write new entries */
-    sfs_write_entries(sfs);
-    return NULL;
-}
-
-/* TODO: old */
-struct S_SFS_FILE *sfs_get_file_by_name(struct sfs *sfs, char *name)
-{
-/*
-    struct sfs_entry_list* entries = sfs_get_entry_list(sfs);
-    struct S_SFS_FILE *f_entry;
-    while (entries != NULL) {
-        if (entries->type == SFS_ENTRY_FILE) {
-            f_entry = entries->entry.file;
-            if (strcmp(name, (char*)f_entry->name) == 0)
-                return f_entry;
-        }
-        entries = entries->next;
-    }
-*/
-    return NULL;
 }
