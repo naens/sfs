@@ -25,3 +25,5 @@ int sfs_mkdir(SFS *sfs, const char *path);
 int sfs_create(SFS *sfs, const char *path);
 
 int sfs_rmdir(SFS *sfs, const char *path);
+
+int sfs_delete(SFS *sfs, const char *path);

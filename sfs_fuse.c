@@ -47,7 +47,7 @@ static void sfs_fuse_destroy(void *private_data)
 
 static int sfs_fuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info* fi)
 {
-    printf("###sfs_fuse_getattr: '%s' ", path);
+    printf("###sfs_fuse_getattr: '%s'\n", path);
 
     stbuf->st_uid = getuid();
     stbuf->st_gid = getgid();
@@ -68,11 +68,11 @@ static int sfs_fuse_getattr(const char *path, struct stat *stbuf, struct fuse_fi
         stbuf->st_mode = S_IFREG | 0644;
         stbuf->st_nlink = 1;
         stbuf->st_size = sfs_get_file_size(sfs, path);
-        printf("=> size = 0x%lx", stbuf->st_size);
+//        printf("=> size = 0x%lx", stbuf->st_size);
         return 0;
     }
 
-    printf("\n");
+//    printf("\n");
     return -ENOENT;
 }
 
@@ -147,6 +147,17 @@ static int sfs_fuse_rmdir(const char *path)
     }
 }
 
+static int sfs_fuse_unlink(const char *path)
+{
+    printf("###sfs_fuse_unlink \"%s\"\n", path);
+    int result = sfs_delete(sfs, path);
+    if (result == 0) {
+        return 0;
+    } else {
+        return -EACCES;
+    }
+}
+
 static struct fuse_operations fuse_operations = {
     .init = sfs_fuse_init,
     .destroy = sfs_fuse_destroy,
@@ -155,7 +166,8 @@ static struct fuse_operations fuse_operations = {
     .readdir = sfs_fuse_readdir,
     .mkdir = sfs_fuse_mkdir,
     .create = sfs_fuse_create,
-    .rmdir = sfs_fuse_rmdir
+    .rmdir = sfs_fuse_rmdir,
+    .unlink = sfs_fuse_unlink
 };
 
 static void show_help(const char *progname)

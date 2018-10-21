@@ -996,7 +996,7 @@ void delete_entries(pfree_list, from, to)
         if (p_entry->type == SFS_ENTRY_FILE_DEL) {
             p_free_item = find_delfile(p_free_item, p_entry); //if not exist => error
             struct sfs_block_list *item_to_delete = *p_free_item;
-            p_free_item = &(*p_free_item)->next;
+            *p_free_item = (*p_free_item)->next;
             free(item_to_delete);
         }
         struct sfs_entry *tmp = p_entry;
@@ -1268,9 +1268,12 @@ int sfs_is_dir_empty(struct sfs *sfs, char *path) {
     struct sfs_entry *entry = sfs->entry_list;
     int path_len = strlen(path);
     while (entry != NULL) {
-        if (entry->type == SFS_ENTRY_DIR
+        if ((entry->type == SFS_ENTRY_DIR
                 && strncmp(path, entry->data.dir_data->name, path_len) == 0
-                && entry->data.dir_data->name[path_len] == '/') {
+                && entry->data.dir_data->name[path_len] == '/')
+        || (entry->type == SFS_ENTRY_FILE
+                && strncmp(path, entry->data.file_data->name, path_len) == 0
+                && entry->data.file_data->name[path_len] == '/')) {
             return 0;
         }
         entry = entry->next;
@@ -1298,6 +1301,44 @@ int sfs_rmdir(struct sfs *sfs, const char *path)
     entry->type = SFS_ENTRY_DIR_DEL;
     if (write_entry(sfs, entry) == 0) {
         printf("\trmdir(%s): ok\n", fxpath);
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+/* Insert a deleted file into the free list */
+void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
+{
+    struct sfs_block_list **p = &sfs->free_list;
+    while ((*p) != NULL) {
+        if ((*p)->start_block > delfile->data.file_data->start_block) {
+            // insert before *p
+            struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+            item->start_block = delfile->data.file_data->start_block;
+            item->length = 1 + get_num_cont(delfile);
+            item->delfile = delfile;
+            item->next = (*p);
+            *p = item;
+            break;
+        }
+        p = &(*p)->next;
+    }
+}
+
+int sfs_delete(struct sfs *sfs, const char *path)
+{
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_delete: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+    if (entry == NULL) {
+        fprintf(stderr, "file \"%s\" does not exists\n", fxpath);
+        return -1;
+    }
+    entry->type = SFS_ENTRY_FILE_DEL;
+    free_list_insert(sfs, entry);
+    if (write_entry(sfs, entry) == 0) {
+        printf("\tdelete(%s): ok\n", fxpath);
         return 0;
     } else {
         return -1;
