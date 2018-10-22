@@ -9,8 +9,15 @@
 #include <stddef.h>
 #include <limits.h>
 
-
 #include "sfs.h"
+
+#ifndef RENAME_NOREPLACE
+#define RENAME_NOREPLACE (1 << 0)
+#endif
+
+#ifndef RENAME_EXCHANGE
+#define RENAME_EXCHANGE (1 << 1)
+#endif
 
 static SFS *sfs;
 
@@ -199,6 +206,27 @@ static int sfs_fuse_utimens(path, tv, fi)
     }
 }
 
+static int sfs_fuse_rename(oldpath, newpath, flags)
+    const char *oldpath;
+    const char *newpath;
+    unsigned int flags;
+{
+    printf("###sfs_fuse_rename \"%s\"->\"%s\"\n", oldpath, newpath);
+    if (flags & RENAME_EXCHANGE) {
+        fprintf(stderr, "rename exchange not implemented\n");
+        return -EACCES;
+    } else { 
+        int replace = ((flags & RENAME_NOREPLACE) == 0);
+        printf("\treplace=%d\n", replace);
+        int result = sfs_rename(sfs, oldpath, newpath, replace);
+        if (result == 0) {
+            return 0;
+        } else {
+            return -EACCES;
+        }
+    }
+}
+
 static struct fuse_operations fuse_operations = {
     .init = sfs_fuse_init,
     .destroy = sfs_fuse_destroy,
@@ -209,7 +237,8 @@ static struct fuse_operations fuse_operations = {
     .create = sfs_fuse_create,
     .rmdir = sfs_fuse_rmdir,
     .unlink = sfs_fuse_unlink,
-    .utimens = sfs_fuse_utimens
+    .utimens = sfs_fuse_utimens,
+    .rename = sfs_fuse_rename
 };
 
 static void show_help(const char *progname)

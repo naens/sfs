@@ -36,3 +36,5 @@ int sfs_get_dir_time(SFS *sfs, const char *path, struct timespec *timespec);
 int sfs_get_file_time(SFS *sfs, const char *path, struct timespec *timespec);
 
 int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec);
+
+int sfs_rename(SFS *sfs, const char *path, const char *path_to, int replace);

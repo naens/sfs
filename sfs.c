@@ -1262,8 +1262,7 @@ int sfs_mkdir(struct sfs *sfs, const char *path)
     dir_entry->data.dir_data = malloc(sizeof(struct sfs_dir));
     dir_entry->data.dir_data->num_cont = num_cont;
     dir_entry->data.dir_data->time_stamp = sfs_make_time_stamp();
-    dir_entry->data.dir_data->name = malloc(path_len + 1);
-    memcpy(dir_entry->data.dir_data->name, fxpath, path_len + 1);
+    dir_entry->data.dir_data->name = strdup(fxpath);
 
     if (put_new_entry(sfs, dir_entry) == -1) {
         printf("\tsfs_mkdir put new entry error\n");
@@ -1298,8 +1297,7 @@ int sfs_create(struct sfs *sfs, const char *path)
     file_entry->data.file_data->start_block = sfs->super->rsvd_blocks;
     file_entry->data.file_data->end_block = sfs->super->rsvd_blocks - 1;
     file_entry->data.file_data->file_len = 0;
-    file_entry->data.file_data->name = malloc(path_len + 1);
-    memcpy(file_entry->data.file_data->name, fxpath, path_len + 1);
+    file_entry->data.file_data->name = strdup(fxpath);
 
     if (put_new_entry(sfs, file_entry) == -1) {
         printf("\tsfs_file put new entry error\n");
@@ -1371,6 +1369,22 @@ void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
     }
 }
 
+// assume that the entry can be deleted
+void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
+{
+    struct sfs_entry **p_entry = &sfs->entry_list;
+    int entry_length = 1 + get_num_cont(entry);
+    struct sfs_entry *tail = entry->next;
+    while (*p_entry != NULL) {
+        if (*p_entry == entry) {
+            *p_entry = insert_unused(sfs, entry->offset, entry_length, tail);
+            free_entry(entry);
+            break;
+        }
+        p_entry = &(*p_entry)->next;
+    }
+}
+
 int sfs_delete(struct sfs *sfs, const char *path)
 {
     char *fxpath = fix_name(path);
@@ -1380,6 +1394,13 @@ int sfs_delete(struct sfs *sfs, const char *path)
         fprintf(stderr, "file \"%s\" does not exists\n", fxpath);
         return -1;
     }
+
+    // do not insert empty files into the free list
+    if (entry->data.file_data->file_len == 0) {
+        delete_entry(sfs, entry);
+        return 0;
+    }
+
     entry->type = SFS_ENTRY_FILE_DEL;
     free_list_insert(sfs, entry);
     if (write_entry(sfs, entry) == 0) {
@@ -1435,14 +1456,121 @@ int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec)
     switch (entry->type) {
     case SFS_ENTRY_DIR:
         entry->data.dir_data->time_stamp = time_stamp;
-        write_entry(sfs, entry);
         break;
     case SFS_ENTRY_FILE:
         entry->data.file_data->time_stamp = time_stamp;
-        write_entry(sfs, entry);
         break;
-    default:
+    }
+    return write_entry(sfs, entry);
+}
+
+void rename_entry(struct sfs_entry *entry, char *name)
+{
+    switch (entry->type) {
+    case SFS_ENTRY_DIR:
+        free(entry->data.dir_data->name);
+        entry->data.dir_data->name = name;
         break;
+    case SFS_ENTRY_FILE:
+        free(entry->data.file_data->name);
+        entry->data.file_data->name = name;
+        break;
+    }
+}
+
+/* Assume: there is no entry with name dest_path.
+ * Rename entry <source_path> to <dest_path>.
+ * Replace in every file and directory entry that starts with <source_path>/
+ * <source_path> with <dest_path>.  Write everything to index area.
+ * Return 0 on success and -1 on error.
+ */
+int move_dir(sfs, source_path, dest_path)
+    struct sfs *sfs;
+    char *source_path;
+    char *dest_path;
+{
+    struct sfs_entry *entry = sfs->entry_list;
+    int src_len = strlen(source_path);
+    int dest_len = strlen(dest_path);
+    while (entry != NULL) {
+        char *name = NULL;
+        switch (entry->type) {
+        case SFS_ENTRY_DIR:
+            name = entry->data.dir_data->name;
+            break;
+        case SFS_ENTRY_FILE:
+            name = entry->data.file_data->name;
+            break;
+        }
+        if (name != NULL) {
+            int name_len = strlen(name);
+            if (name_len >= src_len && (name_len == src_len || name[src_len] == '/')
+                    && strncmp(source_path, name, src_len) == 0) {
+                char *new_name = malloc(dest_len + name_len - src_len + 1);
+                strncpy(new_name, dest_path, dest_len);
+                strncpy(&new_name[dest_len], &name[src_len], name_len - src_len + 1);
+                rename_entry(entry, new_name);
+                if (write_entry(sfs, entry) == -1) {
+                    return -1;
+                }
+            }
+        }
+        entry = entry->next;
+    }
+    return 0;
+}
+
+int sfs_rename(sfs, source_path, dest_path, replace)
+    SFS *sfs;
+    const char *source_path;
+    const char *dest_path;
+    int replace;
+{
+    char *fx_source = fix_name(source_path);
+    char *fx_dest = fix_name(dest_path);
+    printf("@@@@\tsfs_rename: \"%s\"->\"%s\"\n", fx_source, fx_dest);
+    if (strcmp(fx_source, fx_dest) == 0) {
+        return 0;
+    }
+    struct sfs_entry *entry = get_entry_by_name(sfs, fx_source);
+    if (entry == NULL) {
+        fprintf(stderr, "Source \"%s\" does not exist\n", fx_source);
+        return -1;
+    }
+    if (!check_valid_new(sfs, fx_dest)) {
+        fprintf(stderr, "Destination name not valid\n");
+        return -1;
+    }
+    struct sfs_entry *dest_entry = get_entry_by_name(sfs, fx_dest);
+    if (dest_entry != NULL) {
+        if (replace == 0) {
+            fprintf(stderr, "Cannot replace existing file \"%s\"\n", fx_dest);
+            return -1;
+        } else {
+            if (entry->type != dest_entry->type) {
+                fprintf(stderr, "Source and destination of different types\n");
+                return -1;
+            }
+            if (dest_entry->type == SFS_ENTRY_DIR) {
+                // check if directory is empty
+                if (!sfs_is_dir_empty(sfs, fx_dest)) {
+                    fprintf(stderr, "directory \"%s\" is not empty\n", fx_dest);
+                    return -1;
+                }
+            } 
+            // delete entry from entry list
+            delete_entry(sfs, dest_entry);
+        }
+    }
+    if (entry->type == SFS_ENTRY_DIR) {
+        if (move_dir(sfs, fx_source, fx_dest) != 0) {
+            return -1;
+        }
+    } else if (entry->type == SFS_ENTRY_FILE) {
+        rename_entry(entry, strdup(fx_dest));
+        if (write_entry(sfs, entry) != 0) {
+            return -1;
+        }
     }
     return 0;
 }
