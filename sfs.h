@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 struct sfs;
 typedef struct sfs SFS;
@@ -27,3 +28,11 @@ int sfs_create(SFS *sfs, const char *path);
 int sfs_rmdir(SFS *sfs, const char *path);
 
 int sfs_delete(SFS *sfs, const char *path);
+
+int sfs_get_sfs_time(SFS *sfs, struct timespec *timespec);
+
+int sfs_get_dir_time(SFS *sfs, const char *path, struct timespec *timespec);
+
+int sfs_get_file_time(SFS *sfs, const char *path, struct timespec *timespec);
+
+int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec);

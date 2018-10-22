@@ -30,7 +30,7 @@ static const struct fuse_opt option_spec[] = {
 };
 
 static void *sfs_fuse_init(struct fuse_conn_info *conn,
-			struct fuse_config *cfg)
+                        struct fuse_config *cfg)
 {
     printf("###sfs_fuse_init: fn=\"%s\"\n", options.absolute_filename);
     sfs = sfs_init(options.absolute_filename);
@@ -52,27 +52,44 @@ static int sfs_fuse_getattr(const char *path, struct stat *stbuf, struct fuse_fi
     stbuf->st_uid = getuid();
     stbuf->st_gid = getgid();
 
+    struct timespec timespec;
     if (strcmp(path, "/") == 0) {
         stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
-        return 0;
+        if (sfs_get_sfs_time(sfs, &timespec) == 0) {
+            stbuf->st_mtim = timespec;
+            return 0;
+        } else {
+            fprintf(stderr, "sfs_get_sfs_mtime error\n");
+            return -1;
+        }
     }
 
     if (sfs_is_dir(sfs, path)) {
         stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
-        return 0;
+        if (sfs_get_dir_time(sfs, path, &timespec) == 0) {
+            stbuf->st_mtim = timespec;
+            return 0;
+        } else {
+            fprintf(stderr, "sfs_get_sfs_mtime error\n");
+            return -1;
+        }
     }
 
     if (sfs_is_file(sfs, path)) {
         stbuf->st_mode = S_IFREG | 0644;
         stbuf->st_nlink = 1;
         stbuf->st_size = sfs_get_file_size(sfs, path);
-//        printf("=> size = 0x%lx", stbuf->st_size);
-        return 0;
+        if (sfs_get_file_time(sfs, path, &timespec) == 0) {
+            stbuf->st_mtim = timespec;
+            return 0;
+        } else {
+            fprintf(stderr, "sfs_get_sfs_mtime error\n");
+            return -1;
+        }
     }
 
-//    printf("\n");
     return -ENOENT;
 }
 
@@ -158,6 +175,30 @@ static int sfs_fuse_unlink(const char *path)
     }
 }
 
+static int sfs_fuse_utimens(path, tv, fi)
+    const char *path;
+    const struct timespec tv[2];
+    struct fuse_file_info *fi;
+{
+    printf("###sfs_fuse_utimens \"%s\"\n", path);
+    struct timespec timespec = tv[1];
+    if (timespec.tv_nsec == UTIME_NOW) {    // current time
+        printf("\tset now\n");
+        clock_gettime(CLOCK_REALTIME, &timespec);
+    } else if (timespec.tv_nsec == UTIME_OMIT) {  // no change
+        printf("\tomit\n");
+        return 0;
+    }
+    printf("\ttv_sec=0x%08lx\n", timespec.tv_sec);
+    printf("\ttv_nsec=0x%08lx\n", timespec.tv_nsec);
+    int result = sfs_set_time(sfs, path, &timespec);
+    if (result == 0) {
+        return 0;
+    } else {
+        return -EACCES;
+    }
+}
+
 static struct fuse_operations fuse_operations = {
     .init = sfs_fuse_init,
     .destroy = sfs_fuse_destroy,
@@ -167,7 +208,8 @@ static struct fuse_operations fuse_operations = {
     .mkdir = sfs_fuse_mkdir,
     .create = sfs_fuse_create,
     .rmdir = sfs_fuse_rmdir,
-    .unlink = sfs_fuse_unlink
+    .unlink = sfs_fuse_unlink,
+    .utimens = sfs_fuse_utimens
 };
 
 static void show_help(const char *progname)
@@ -195,7 +237,7 @@ int main(int argc, char **argv)
     int ret;
     if (options.show_help || options.filename == NULL) {
         show_help(argv[0]);
-	ret = 0;
+        ret = 0;
     } else {
         ret = fuse_main(args.argc, args.argv, &fuse_operations, NULL);
     }

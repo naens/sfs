@@ -155,17 +155,36 @@ struct S_SFS_UNUSABLE {
     uint8_t resv1[38];
 };
 
-uint64_t sfs_make_time_stamp()
+uint64_t timespec_to_time_stamp(struct timespec *timespec)
 {
-    struct timespec spec;
-    clock_gettime(CLOCK_REALTIME, &spec);
-    time_t s = spec.tv_sec;
-    long n = spec.tv_nsec;
+    time_t s = timespec->tv_sec;
+    long n = timespec->tv_nsec;
     // timestamp = secs * 65536
     // (n / 1000000000 + s) * 65536
     // n*128/1953125 + 65536*s
     uint64_t timestamp = round((n << 7) / 1953125.0) + (s << 16);
     return timestamp;
+}
+
+uint64_t sfs_make_time_stamp()
+{
+    struct timespec spec;
+    clock_gettime(CLOCK_REALTIME, &spec);
+    return timespec_to_time_stamp(&spec);
+}
+
+void sfs_fill_timespec(uint64_t time_stamp, struct timespec *timespec)
+{
+    uint64_t sec = time_stamp >> 16;
+
+    // 1/65536 of sec
+    uint64_t rest = time_stamp & 0x10000;
+
+    // convert 1/65536 to 1/1000000000
+    uint64_t nsec = round((rest * 1953125) / 128.0);
+
+    timespec->tv_sec = sec;
+    timespec->tv_nsec = nsec;
 }
 
 int check_crc(uint8_t *buf, int sz)
@@ -226,6 +245,7 @@ struct sfs_super *sfs_read_super(struct sfs *sfs)
 
 void sfs_write_super(FILE *file, struct sfs_super *super) {
     char buf[SFS_SUPER_SIZE];
+    super->time_stamp = sfs_make_time_stamp();
     memcpy(&buf[0], &super->time_stamp, 8);
     memcpy(&buf[8], &super->data_size, 8);
     memcpy(&buf[16], &super->index_size, 8);
@@ -697,6 +717,27 @@ uint64_t sfs_get_file_size(SFS *sfs, const char *path)
         entry = entry->next;
     }
     return 0;
+}
+
+// do not return deleted files and directories
+struct sfs_entry *get_entry_by_name(SFS *sfs, char *path) {
+    struct sfs_entry *entry = sfs->entry_list;
+    while (entry != NULL) {
+        switch (entry->type) {
+        case SFS_ENTRY_DIR:
+            if (strcmp(path, entry->data.dir_data->name) == 0) {
+                return entry;
+            }
+            break;
+        case SFS_ENTRY_FILE:
+            if (strcmp(path, entry->data.file_data->name) == 0) {
+                return entry;
+            }
+            break;
+        }
+        entry = entry->next;
+    }
+    return NULL;
 }
 
 struct sfs_entry *get_dir_by_name(SFS *sfs, char *path) {
@@ -1343,4 +1384,61 @@ int sfs_delete(struct sfs *sfs, const char *path)
     } else {
         return -1;
     }
+}
+
+int sfs_get_sfs_time(SFS *sfs, struct timespec *timespec)
+{
+    sfs_fill_timespec(sfs->super->time_stamp, timespec);
+    return 0;
+}
+
+int sfs_get_dir_time(SFS *sfs, const char *path, struct timespec *timespec)
+{
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_get_dir_time: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = get_dir_by_name(sfs, fxpath);
+    if (entry == NULL) {
+        fprintf(stderr, "directory \"%s\" does not exists\n", fxpath);
+        return -1;
+    }
+    sfs_fill_timespec(entry->data.dir_data->time_stamp, timespec);
+    return 0;
+}
+
+int sfs_get_file_time(SFS *sfs, const char *path, struct timespec *timespec)
+{
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_get_file_time: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+    if (entry == NULL) {
+        fprintf(stderr, "file \"%s\" does not exists\n", fxpath);
+        return -1;
+    }
+    sfs_fill_timespec(entry->data.file_data->time_stamp, timespec);
+    return 0;
+}
+
+int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec)
+{
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_set_time: name=\"%s\"\n", fxpath);
+    struct sfs_entry *entry = get_entry_by_name(sfs, fxpath);
+    if (entry == NULL) {
+        fprintf(stderr, "File or directory\"%s\" does not exists\n", fxpath);
+        return -1;
+    }
+    uint64_t time_stamp = timespec_to_time_stamp(timespec);
+    switch (entry->type) {
+    case SFS_ENTRY_DIR:
+        entry->data.dir_data->time_stamp = time_stamp;
+        write_entry(sfs, entry);
+        break;
+    case SFS_ENTRY_FILE:
+        entry->data.file_data->time_stamp = time_stamp;
+        write_entry(sfs, entry);
+        break;
+    default:
+        break;
+    }
+    return 0;
 }
