@@ -1219,6 +1219,10 @@ int check_valid_new(struct sfs *sfs, char *path)
     int path_len = strlen(path);
     char *basename = get_basename(path);
     int basename_len = strlen(basename);
+    if (basename_len == 0) {
+        printf(" empty basename\n");
+        return 0;
+    }
 
     /* check if prent dir exists */
     if (path_len > basename_len) {
