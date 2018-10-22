@@ -17,6 +17,17 @@ sfs_tool: sfs_tool.c sfs.c
 fuse: sfs_fuse
 	./sfs_fuse -s -f test
 
+.PHONY: docs
+docs: sfs.c sfs_tool.c
+	robodoc --src ./ --doc ./docs --html --multidoc --nodesc \
+			--sections --tell --toc --index
+	mv docs/masterindex.html docs/index.html
+
+.PHONY: troff
+troff: sfs.c sfs_tool.c
+	robodoc --src ./ --doc ./troff --troff --multidoc --nodesc \
+			--sections --tell
+
 .PHONY: clean
 clean:
 	rm -f *.o view sfs_tool sfs_fuse
