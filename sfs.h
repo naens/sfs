@@ -38,3 +38,7 @@ int sfs_get_file_time(SFS *sfs, const char *path, struct timespec *timespec);
 int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec);
 
 int sfs_rename(SFS *sfs, const char *path, const char *path_to, int replace);
+
+int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t offset);
+
+int sfs_resize(SFS *sfs, const char *path, off_t length);

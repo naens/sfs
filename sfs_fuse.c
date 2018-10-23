@@ -37,6 +37,7 @@ static struct options {
 
 #define OPTION(t, p)                           \
     { t, offsetof(struct options, p), 1 }
+
 static const struct fuse_opt option_spec[] = {
     OPTION("--name=%s", filename),
     OPTION("-h", show_help),
@@ -47,7 +48,7 @@ static const struct fuse_opt option_spec[] = {
 static void *sfs_fuse_init(struct fuse_conn_info *conn,
                         struct fuse_config *cfg)
 {
-    printf("###sfs_fuse_init: fn=\"%s\"\n", options.absolute_filename);
+    printf("### sfs_fuse_init: fn=\"%s\"\n", options.absolute_filename);
     sfs = sfs_init(options.absolute_filename);
     cfg->kernel_cache = 1;
     return NULL;
@@ -55,14 +56,14 @@ static void *sfs_fuse_init(struct fuse_conn_info *conn,
 
 static void sfs_fuse_destroy(void *private_data)
 {
-    printf("###sfs_fuse_destroy\n");
+    printf("### sfs_fuse_destroy\n");
     sfs_terminate(sfs);
     sfs = NULL;
 }
 
 static int sfs_fuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info* fi)
 {
-    printf("###sfs_fuse_getattr: '%s'\n", path);
+    printf("### sfs_fuse_getattr: '%s'\n", path);
 
     stbuf->st_uid = getuid();
     stbuf->st_gid = getgid();
@@ -115,7 +116,7 @@ static int sfs_fuse_read(path, buf, size, offset, fi)
     off_t offset;
     struct fuse_file_info *fi;
 {
-    printf("###sfs_fuse_read: '%s', size: 0x%lx, offset: 0x%lx\n", path, size, offset);
+    printf("### sfs_fuse_read: '%s', size: 0x%lx, offset: 0x%lx\n", path, size, offset);
 
     int sz = sfs_read(sfs, path, buf, size, offset);
     if (sz >= 0) {
@@ -132,7 +133,7 @@ static int sfs_fuse_readdir(path, buf, filler, offset, fi)
     off_t offset;
     struct fuse_file_info *fi;
 {
-    printf("###sfs_fuse_readdir: '%s', offset:%lx\n", path, offset);
+    printf("### sfs_fuse_readdir: '%s', offset:%lx\n", path, offset);
     filler(buf, ".", NULL, 0, 0);
     filler(buf, "..", NULL, 0, 0);
     char *name = sfs_first(sfs, path);
@@ -148,7 +149,7 @@ static int sfs_fuse_readdir(path, buf, filler, offset, fi)
 
 static int sfs_fuse_mkdir(const char *path, mode_t mode)
 {
-    printf("###sfs_fuse_mkdir \"%s\"\n", path);
+    printf("### sfs_fuse_mkdir \"%s\"\n", path);
     int result = sfs_mkdir(sfs, path);
     if (result == 0) {
         return 0;
@@ -159,7 +160,7 @@ static int sfs_fuse_mkdir(const char *path, mode_t mode)
 
 static int sfs_fuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
-    printf("###sfs_fuse_create \"%s\"\n", path);
+    printf("### sfs_fuse_create \"%s\"\n", path);
     int result = sfs_create(sfs, path);
     if (result == 0) {
         return 0;
@@ -170,7 +171,7 @@ static int sfs_fuse_create(const char *path, mode_t mode, struct fuse_file_info 
 
 static int sfs_fuse_rmdir(const char *path)
 {
-    printf("###sfs_fuse_rmdir \"%s\"\n", path);
+    printf("### sfs_fuse_rmdir \"%s\"\n", path);
     int result = sfs_rmdir(sfs, path);
     if (result == 0) {
         return 0;
@@ -181,7 +182,7 @@ static int sfs_fuse_rmdir(const char *path)
 
 static int sfs_fuse_unlink(const char *path)
 {
-    printf("###sfs_fuse_unlink \"%s\"\n", path);
+    printf("### sfs_fuse_unlink \"%s\"\n", path);
     int result = sfs_delete(sfs, path);
     if (result == 0) {
         return 0;
@@ -195,7 +196,7 @@ static int sfs_fuse_utimens(path, tv, fi)
     const struct timespec tv[2];
     struct fuse_file_info *fi;
 {
-    printf("###sfs_fuse_utimens \"%s\"\n", path);
+    printf("### sfs_fuse_utimens \"%s\"\n", path);
     struct timespec timespec = tv[1];
     if (timespec.tv_nsec == UTIME_NOW) {    // current time
         printf("\tset now\n");
@@ -219,7 +220,7 @@ static int sfs_fuse_rename(oldpath, newpath, flags)
     const char *newpath;
     unsigned int flags;
 {
-    printf("###sfs_fuse_rename \"%s\"->\"%s\"\n", oldpath, newpath);
+    printf("### sfs_fuse_rename \"%s\"->\"%s\"\n", oldpath, newpath);
     if (flags & RENAME_EXCHANGE) {
         fprintf(stderr, "rename exchange not implemented\n");
         return -EACCES;
@@ -235,6 +236,40 @@ static int sfs_fuse_rename(oldpath, newpath, flags)
     }
 }
 
+//       ssize_t write(int fd, const void *buf, size_t count);
+
+static int sfs_fuse_write(path, buf, size, offset, fi)
+    const char *path;
+    const char *buf;
+    size_t size;
+    off_t offset;
+    struct fuse_file_info *fi;
+{
+    printf("### sfs_fuse_write: '%s', size: 0x%lx, offset: 0x%lx\n", path, size, offset);
+
+    int sz = sfs_write(sfs, path, buf, size, offset);
+    if (sz >= 0) {
+        return sz;
+    } else {
+        return -ENOENT;
+    }
+}
+
+static int sfs_fuse_truncate(path, length, fi)
+    const char *path;
+    off_t length;
+    struct fuse_file_info *fi;
+{
+    printf("### sfs_fuse_truncate: '%s', offset: 0x%lx\n", path, length);
+
+    int sz = sfs_resize(sfs, path, length);
+    if (sz >= 0) {
+        return sz;
+    } else {
+        return -ENOENT;
+    }
+}
+
 static struct fuse_operations fuse_operations = {
     .init = sfs_fuse_init,
     .destroy = sfs_fuse_destroy,
@@ -246,7 +281,9 @@ static struct fuse_operations fuse_operations = {
     .rmdir = sfs_fuse_rmdir,
     .unlink = sfs_fuse_unlink,
     .utimens = sfs_fuse_utimens,
-    .rename = sfs_fuse_rename
+    .rename = sfs_fuse_rename,
+    .write = sfs_fuse_write,
+    .truncate = sfs_fuse_truncate
 };
 
 static void show_help(const char *progname)

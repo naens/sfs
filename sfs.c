@@ -882,14 +882,6 @@ int sfs_read(SFS *sfs, const char *path, char *buf, size_t size, off_t offset)
         }
         uint64_t data_offset = sfs->block_size * entry->data.file_data->start_block;
         uint64_t read_from = data_offset + offset;
-/*
-        printf("\tstart:\t0x%06lx\n", data_offset);
-        printf("\tend:\t0x%06lx\n", data_offset + len);
-        printf("\tfilesz:\t0x%06lx\n", len);
-        printf("\tfrom:\t0x%06lx\n", read_from);
-        printf("\tto:\t0x%06lx\n", read_from + sz);
-        printf("\treadsz:\t0x%06lx\n", sz);
-*/
         fseek(sfs->file, read_from, SEEK_SET);
         fread(buf, sz, 1, sfs->file);
         return sz;
@@ -1571,6 +1563,206 @@ int sfs_rename(sfs, source_path, dest_path, replace)
         if (write_entry(sfs, entry) != 0) {
             return -1;
         }
+    }
+    return 0;
+}
+
+int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t offset)
+{
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_write: path=\"%s\", size:0x%lx, offset:0x%lx\n", fxpath, size, offset);
+    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+    if (entry != NULL) {
+        uint64_t sz;		// number of bytes to write
+        uint64_t len = entry->data.file_data->file_len;
+        printf("\toffset=0x%06lx\n", offset);
+        printf("\tlen=0x%06lx\n", len);
+        if ((uint64_t)offset > len) {
+            return 0;
+        }
+        if (offset + size > len) {
+            sz = len - offset;
+        } else {
+            sz = size;
+        }
+        uint64_t data_offset = sfs->block_size * entry->data.file_data->start_block;
+        uint64_t write_start = data_offset + offset;
+        printf("\tdata_offset=0x%06lx\n", data_offset);
+        printf("\twrite_start=0x%06lx\n", write_start);
+        if (fseek(sfs->file, write_start, SEEK_SET) != 0) {
+            fprintf(stderr, "f!! seek error\n");
+            return -1;
+        }
+        if (fwrite(buf, sz, 1, sfs->file) != sz) {
+            fprintf(stderr, "!! fwrite error\n");
+            return -1;
+        }
+        return sz;
+    } else {
+        fprintf(stderr, "!! no file error\n");
+        return -1;
+    }
+}
+
+struct sfs_block_list **free_list_find(sfs, start_block, length)
+    SFS *sfs;
+    uint64_t start_block;
+    uint64_t length;
+{
+    struct sfs_block_list **p = &sfs->free_list;
+    struct sfs_block_list **pfirst = p;
+    uint64_t tot = 0;
+    uint64_t next = 0;
+    while (*p != NULL && tot < length) {
+        if(next != (*p)->start_block) {
+            pfirst = p;
+            tot = 0;
+        }
+        tot += (*p)->length;
+        next = (*p)->start_block + (*p)->length;
+        p = &(*p)->next;
+    }
+    if (tot >= length) {
+        return pfirst;
+    }
+    return NULL;
+}
+
+int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
+{
+    struct sfs_block_list **p = free_list_find(sfs, start, len);
+    if (*p == NULL) {
+        return -1;
+    }
+    if ((*p)->delfile == NULL && (*p)->start_block == start + len) {
+        (*p)->start_block = start;
+        (*p)->length += len;
+    } else {
+        struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+        item->start_block = start;
+        item->length = len;
+        item->delfile = NULL;
+        item->next = (*p);
+        *p = item;
+    }
+    return 0;
+}
+
+int free_list_del(SFS *sfs, struct sfs_block_list **p_from, uint64_t length)
+{
+    uint64_t rest = length;
+    struct sfs_block_list **p = p_from;
+    while (*p != NULL && (*p)->length <= rest) {
+        struct sfs_block_list *tmp = (*p);
+        rest -= (*p)->length;
+        *p = (*p)->next;
+        if (tmp->delfile != NULL) {
+            delete_entries(&sfs->free_list, tmp->delfile, tmp->delfile->next);
+        }
+        free(tmp);
+    }
+    if (*p == NULL) {
+        return -1;
+    }
+    (*p)->length -= rest;
+    (*p)->start_block += rest;
+    return 0;
+}
+
+/****f*
+ *  NAME
+ *    sfs_resize -- resize a file
+ *  DESCRIPTION
+ *    Resize a file *path* to size *len*.  Truncate the file if its size
+ *    is less than *len*.  Otherwise, fills with null characters.
+ *  PARAMETERS
+ *    sfs - the SFS variable
+ *    path - the absolute path of the file
+ *    len - the new size for the file
+ *  RETURN VALUE
+ *    Returns 0 on success and -1 on error.
+ ****
+ * Pseudocode:
+ *   l0 - initial file size
+ *   l1 - final file size
+ *   b0 - initial number of blocks used by the file
+ *   b1 - number of block needed for its new size
+ *   s0 - the first block of the file
+ *   file_entry - file entry in the Index Area
+ *
+ *   if b1 > b0 then    // file is to small
+ *     p_next = free_list_find(sfs, s0 + l0, b1 - b0)
+ *     if next <> null then     // enough space right after the file
+ *       free_list_del(sfs, p_next, b1 - b0)
+ *     else                     // not enough space: find some blocks
+ *       p_blocks = free_list_find(sfs, 0, b1)
+ *       copy the file contents: b0*bs bytes from s0 to start of p_blocks
+ *     end if
+ *     set file_entry start: s0
+ *   else if b0 > b1    // file is to big => free b0-b1 blocks after the file
+ *     free_list_add(sfs, s0 + b0, b0 - b1)
+ *   end if
+ *   if l1 > l0 then
+ *     fill l1 - l0 bytes after the file contents with '\0'
+ *   end if
+ *   write_entry(sfs, file_entry)
+ */
+int sfs_resize(SFS *sfs, const char *path, off_t len)
+{
+    const uint64_t bs = sfs->block_size;
+    char *fxpath = fix_name(path);
+    printf("@@@@\tsfs_resize: name=\"%s\" length=%ld\n", fxpath, len);
+    struct sfs_entry *file_entry = get_file_by_name(sfs, fxpath);
+    if (file_entry == NULL) {
+        fprintf(stderr, "file \"%s\" does not exists\n", fxpath);
+        return -1;
+    }
+    if (file_entry->type != SFS_ENTRY_FILE) {
+        fprintf(stderr, "\"%s\" is not a file\n", fxpath);
+        return -1;
+    }
+    const uint64_t l0 = file_entry->data.file_data->file_len;
+    const uint64_t l1 = (uint64_t)len;
+    const uint64_t b0 = (l0 + bs - 1) / bs;
+    const uint64_t b1 = (len + bs - 1) / bs;
+    const uint64_t s0 = file_entry->data.file_data->start_block;
+    if (b1 > b0) {
+        struct sfs_block_list **p_next = free_list_find(sfs, s0 + l0, b1 - b0);
+        if (*p_next != NULL) {
+            free_list_del(sfs, p_next, b1 - b0);
+        } else {
+            struct sfs_block_list **p_blocks = free_list_find(sfs, 0, b1);
+            if (*p_blocks == NULL) {
+                return -1;
+            }
+            if (free_list_del(sfs, p_blocks, b1) != 0) {
+                return -1;
+            }
+            if (free_list_add(sfs, s0, b0) != 0) {
+                return -1;
+            }
+            for (uint64_t i = 0; i < b0; ++i) {
+                char buf[bs];
+                fseek(sfs->file, (file_entry->data.file_data->file_len + i) * bs, SEEK_SET);
+                fread(buf, bs, 1, sfs->file);
+                fseek(sfs->file, ((*p_blocks)->start_block + i) * bs, SEEK_SET);
+                fwrite(buf, bs, 1, sfs->file);
+            }
+            file_entry->data.file_data->start_block = (*p_blocks)->start_block;
+        }
+    } else if (b0 > b1) {
+        if (free_list_add(sfs, s0 + b0, b0 - b1)) {
+            return -1;
+        }
+    }
+    if (l1 > l0) {
+        char c = '\0';
+        fseek(sfs->file, (s0 + len) * bs, SEEK_SET);
+        fwrite(&c, 1, l1 - l0, sfs->file);
+    }
+    file_entry->data.file_data->file_len = l1;
+    if (write_entry(sfs, file_entry) != 0) {
+        return -1;
     }
     return 0;
 }
