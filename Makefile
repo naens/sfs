@@ -1,6 +1,6 @@
 CC=gcc
-CFLAGS=-Werror -Wfatal-errors -g -O0 -Wall -lm
-FUSEFLAGS=$(shell pkg-config fuse3 --cflags --libs)
+CFLAGS=-g -O0 -Wfatal-errors -Wextra -Wall -Wno-unused-parameter $(shell pkg-config fuse3 --cflags)
+LDFLAGS=-lm $(shell pkg-config fuse3 --libs)
 
 all: sfs_fuse sfs_tool
 
@@ -8,10 +8,10 @@ all: sfs_fuse sfs_tool
 #	gcc -Werror -Wfatal-errors -g -O0 -Wall view.c sfs.c dirset.c -o view
 
 sfs_fuse: sfs_fuse.c sfs.c
-	$(CC) $^ -o $@ $(CFLAGS) $(FUSEFLAGS)
+	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
 sfs_tool: sfs_tool.c sfs.c
-	$(CC) $^ -o $@ $(CFLAGS) $(FUSEFLAGS)
+	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
 .PHONY: fuse
 fuse: sfs_fuse

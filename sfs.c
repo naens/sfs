@@ -872,7 +872,7 @@ int sfs_read(SFS *sfs, const char *path, char *buf, size_t size, off_t offset)
     if (entry != NULL) {
         uint64_t sz;		// number of bytes to be read
         uint64_t len = entry->data.file_data->file_len;
-        if (offset > len) {
+        if ((uint64_t)offset > len) {
             return 0;
         }
         if (offset + size > len) {

@@ -3,6 +3,12 @@
 !*.*
 !Makefile
 *.img
+*.files
+*.includes
+*.config
+*.creator
+*.creator.user
+DEADJOE
 vgcore*
 test
 bk
