@@ -155,7 +155,7 @@ struct S_SFS_UNUSABLE {
     uint8_t resv1[38];
 };
 
-uint64_t timespec_to_time_stamp(struct timespec *timespec)
+static uint64_t timespec_to_time_stamp(struct timespec *timespec)
 {
     time_t s = timespec->tv_sec;
     long n = timespec->tv_nsec;
@@ -166,14 +166,14 @@ uint64_t timespec_to_time_stamp(struct timespec *timespec)
     return timestamp;
 }
 
-uint64_t sfs_make_time_stamp()
+static uint64_t make_time_stamp()
 {
     struct timespec spec;
     clock_gettime(CLOCK_REALTIME, &spec);
     return timespec_to_time_stamp(&spec);
 }
 
-void sfs_fill_timespec(uint64_t time_stamp, struct timespec *timespec)
+static void fill_timespec(uint64_t time_stamp, struct timespec *timespec)
 {
     uint64_t sec = time_stamp >> 16;
 
@@ -187,7 +187,7 @@ void sfs_fill_timespec(uint64_t time_stamp, struct timespec *timespec)
     timespec->tv_nsec = nsec;
 }
 
-int check_crc(uint8_t *buf, int sz)
+static int check_crc(uint8_t *buf, int sz)
 {
     uint8_t sum = 0;
     for (int i = 0; i < sz; i++)
@@ -199,7 +199,7 @@ int check_crc(uint8_t *buf, int sz)
     return 1;
 }
 
-struct sfs_super *sfs_read_super(struct sfs *sfs)
+static struct sfs_super *read_super(struct sfs *sfs)
 {
     sfs->super = malloc(sizeof(struct sfs_super));
     uint8_t buf[SFS_SUPER_SIZE];
@@ -243,9 +243,9 @@ struct sfs_super *sfs_read_super(struct sfs *sfs)
     return sfs->super;
 }
 
-void sfs_write_super(FILE *file, struct sfs_super *super) {
+static void write_super(FILE *file, struct sfs_super *super) {
     char buf[SFS_SUPER_SIZE];
-    super->time_stamp = sfs_make_time_stamp();
+    super->time_stamp = make_time_stamp();
     memcpy(&buf[0], &super->time_stamp, 8);
     memcpy(&buf[8], &super->data_size, 8);
     memcpy(&buf[16], &super->index_size, 8);
@@ -263,7 +263,7 @@ void sfs_write_super(FILE *file, struct sfs_super *super) {
     fwrite(buf, SFS_SUPER_SIZE, 1, file);
 }
 
-struct sfs_entry *sfs_read_volume_data(uint8_t *buf, struct sfs_entry *entry)
+static struct sfs_entry *read_volume_data(uint8_t *buf, struct sfs_entry *entry)
 {
     struct sfs_vol *volume_data = malloc(sizeof(struct sfs_vol));
     uint8_t *cbuf = buf + 4; /* skip type, crc, and resvd */
@@ -278,7 +278,7 @@ struct sfs_entry *sfs_read_volume_data(uint8_t *buf, struct sfs_entry *entry)
     return entry;
 }
 
-struct sfs_entry *sfs_read_dir_data(uint8_t *buf, struct sfs_entry *entry, FILE *file)
+static struct sfs_entry *read_dir_data(uint8_t *buf, struct sfs_entry *entry, FILE *file)
 {
     uint8_t *b = buf;
     struct sfs_dir *dir_data = malloc(sizeof(struct sfs_dir));
@@ -307,7 +307,7 @@ struct sfs_entry *sfs_read_dir_data(uint8_t *buf, struct sfs_entry *entry, FILE 
     return entry;   
 }
 
-struct sfs_entry *sfs_read_file_data(uint8_t *buf, struct sfs_entry *entry, FILE *file)
+static struct sfs_entry *read_file_data(uint8_t *buf, struct sfs_entry *entry, FILE *file)
 {
     uint8_t *b = buf;
     struct sfs_file *file_data = malloc(sizeof(struct sfs_file));
@@ -339,7 +339,7 @@ struct sfs_entry *sfs_read_file_data(uint8_t *buf, struct sfs_entry *entry, FILE
     return entry;   
 }
 
-struct sfs_entry *sfs_read_unusable_data(uint8_t *buf, struct sfs_entry *entry)
+static struct sfs_entry *read_unusable_data(uint8_t *buf, struct sfs_entry *entry)
 {
     struct sfs_unusable *unusable_data = malloc(sizeof(struct sfs_unusable));
     memcpy(&unusable_data->start_block, &buf[10], 8);
@@ -352,7 +352,7 @@ struct sfs_entry *sfs_read_unusable_data(uint8_t *buf, struct sfs_entry *entry)
 }
 
 /* read entry, at current location */
-struct sfs_entry *sfs_read_entry(SFS *sfs)
+static struct sfs_entry *read_entry(SFS *sfs)
 {
 
     uint8_t buf[SFS_ENTRY_SIZE];
@@ -367,15 +367,15 @@ struct sfs_entry *sfs_read_entry(SFS *sfs)
     entry->next = NULL;
     switch (entry->type) {
     case SFS_ENTRY_VOL_ID:
-        return sfs_read_volume_data(buf, entry);
+        return read_volume_data(buf, entry);
     case SFS_ENTRY_DIR:
     case SFS_ENTRY_DIR_DEL:
-        return sfs_read_dir_data(buf, entry, sfs->file);
+        return read_dir_data(buf, entry, sfs->file);
     case SFS_ENTRY_FILE:
     case SFS_ENTRY_FILE_DEL:
-        return sfs_read_file_data(buf, entry, sfs->file);
+        return read_file_data(buf, entry, sfs->file);
     case SFS_ENTRY_UNUSABLE:
-        return sfs_read_unusable_data(buf, entry);
+        return read_unusable_data(buf, entry);
     default:
         printf("entry->type=%x\n", entry->type);
         return entry;
@@ -390,7 +390,7 @@ struct sfs_entry *sfs_read_volume(SFS *sfs)
         return NULL;
     }
 
-    struct sfs_entry *volume = sfs_read_entry(sfs);
+    struct sfs_entry *volume = read_entry(sfs);
     if (volume->type != SFS_ENTRY_VOL_ID) {
         return NULL;
     }
@@ -398,7 +398,7 @@ struct sfs_entry *sfs_read_volume(SFS *sfs)
     return volume;
 }
 
-struct sfs_entry *sfs_read_entries(SFS *sfs)
+static struct sfs_entry *read_entries(SFS *sfs)
 {
     int offset = sfs->block_size * sfs->super->total_blocks - sfs->super->index_size;
     printf("bs=0x%x, tt=0x%lxH, is=0x%lx, of=0x%x\n",
@@ -407,11 +407,11 @@ struct sfs_entry *sfs_read_entries(SFS *sfs)
         fprintf(stderr, "fseek error\n");
         return NULL;
     }
-    struct sfs_entry *entry = sfs_read_entry(sfs);
+    struct sfs_entry *entry = read_entry(sfs);
     struct sfs_entry *head = entry;
     while (entry->type != SFS_ENTRY_VOL_ID) {
         struct sfs_entry *prev = entry;
-        entry = sfs_read_entry(sfs);
+        entry = read_entry(sfs);
         prev->next = entry;
     }
     sfs->volume = entry;
@@ -480,7 +480,7 @@ struct sfs_block_list **conquer(struct sfs_block_list **p1, struct sfs_block_lis
     return p2;  // return the tail
 }
 
-void print_block_list(char *info, struct sfs_block_list *list)
+static void print_block_list(char *info, struct sfs_block_list *list)
 {
     printf("%s", info);
     while (list != NULL) {
@@ -491,7 +491,7 @@ void print_block_list(char *info, struct sfs_block_list *list)
     printf("\n");
 }
 
-void sort_block_list(struct sfs_block_list **plist)
+static void sort_block_list(struct sfs_block_list **plist)
 {
     int sz = 1;
     int n;
@@ -513,7 +513,7 @@ void sort_block_list(struct sfs_block_list **plist)
     } while (n > 1);
 }
 
-void block_list_to_free_list(plist, first_block, total_blocks, free_last)
+static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
     struct sfs_block_list **plist;
     uint64_t first_block;
     uint64_t total_blocks;
@@ -621,12 +621,12 @@ SFS *sfs_init(const char *filename)
         fprintf(stderr, "sfs_init: file error \"%s\"\n", filename);
         return NULL;
     }
-    sfs->super = sfs_read_super(sfs);
+    sfs->super = read_super(sfs);
     if (sfs->super == NULL) {
         fprintf(stderr, "sfs_init: error reading the superblock\n");
         exit(7);
     }
-    sfs->entry_list = sfs_read_entries(sfs);
+    sfs->entry_list = read_entries(sfs);
     sfs->free_last = NULL;
     sfs->free_list = make_free_list(sfs, sfs->entry_list, &sfs->free_last);
     if (sfs->free_last == NULL) {
@@ -636,7 +636,7 @@ SFS *sfs_init(const char *filename)
     return sfs;
 }
 
-void free_entry(struct sfs_entry *entry)
+static void free_entry(struct sfs_entry *entry)
 {
 //    printf("freeing: %x\n", entry->type);
     switch (entry->type) {
@@ -663,7 +663,7 @@ void free_entry(struct sfs_entry *entry)
     free(entry);
 }
 
-void free_entry_list(struct sfs_entry *entry_list)
+static void free_entry_list(struct sfs_entry *entry_list)
 {
     struct sfs_entry *prev = entry_list;
     struct sfs_entry *curr = prev->next;
@@ -675,7 +675,7 @@ void free_entry_list(struct sfs_entry *entry_list)
     free_entry(prev);
 }
 
-void free_free_list(struct sfs_block_list *free_list)
+static void free_free_list(struct sfs_block_list *free_list)
 {
     struct sfs_block_list *prev = free_list;
     struct sfs_block_list *curr = prev->next;
@@ -697,7 +697,7 @@ int sfs_terminate(SFS *sfs)
     return 0;
 }
 
-char *fix_name(const char *path)
+static char *fix_name(const char *path)
 {
     char *result = (char *)path;
     while (*result == '/')
@@ -812,7 +812,7 @@ struct sfs_entry *find_entry_from(struct sfs_entry *entry, char *path)
     return NULL;
 }
 
-char *get_basename(char *full_name)
+static char *get_basename(char *full_name)
 {
     char *p = full_name;
     int i = 0;
@@ -826,7 +826,7 @@ char *get_basename(char *full_name)
     return &p[last_slash + 1];
 }
 
-char *get_entry_basename(struct sfs_entry *entry)
+static char *get_entry_basename(struct sfs_entry *entry)
 {
     switch (entry->type) {
     case SFS_ENTRY_DIR:
@@ -890,7 +890,7 @@ int sfs_read(SFS *sfs, const char *path, char *buf, size_t size, off_t offset)
     }
 }
 
-int get_num_cont(struct sfs_entry *entry)
+static int get_num_cont(struct sfs_entry *entry)
 {
     switch (entry->type) {
     case SFS_ENTRY_DIR:
@@ -904,7 +904,7 @@ int get_num_cont(struct sfs_entry *entry)
     }
 }
 
-int get_entry_usable_space(struct sfs_entry *entry)
+static int get_entry_usable_space(struct sfs_entry *entry)
 {
     switch (entry->type) {
     case SFS_ENTRY_DIR_DEL:
@@ -918,13 +918,13 @@ int get_entry_usable_space(struct sfs_entry *entry)
     }
 }
 
-void write_volume_data(char *buf, struct sfs_vol *vol_data)
+static void write_volume_data(char *buf, struct sfs_vol *vol_data)
 {
     memcpy(&buf[4], &vol_data->time_stamp, 8);
     strncpy(&buf[12], vol_data->name, SFS_VOL_NAME_LEN);
 }
 
-void write_dir_data(char *buf, struct sfs_dir *dir_data)
+static void write_dir_data(char *buf, struct sfs_dir *dir_data)
 {
     memcpy(&buf[2], &dir_data->num_cont, 1);
     memcpy(&buf[3], &dir_data->time_stamp, 8);
@@ -932,7 +932,7 @@ void write_dir_data(char *buf, struct sfs_dir *dir_data)
     strncpy(&buf[11], dir_data->name, max_len);
 }
 
-void write_file_data(char *buf, struct sfs_file *file_data)
+static void write_file_data(char *buf, struct sfs_file *file_data)
 {
     memcpy(&buf[2], &file_data->num_cont, 1);
     memcpy(&buf[3], &file_data->time_stamp, 8);
@@ -943,7 +943,7 @@ void write_file_data(char *buf, struct sfs_file *file_data)
     strncpy(&buf[35], file_data->name, max_len);
 }
 
-void write_unusable_data(char *buf, struct sfs_unusable *unusable_data)
+static void write_unusable_data(char *buf, struct sfs_unusable *unusable_data)
 {
     memcpy(&buf[10], &unusable_data->start_block, 8);
     memcpy(&buf[18], &unusable_data->end_block, 8);
@@ -953,7 +953,7 @@ void write_unusable_data(char *buf, struct sfs_unusable *unusable_data)
 /* Writes the entry (with its continuations) to the Index Area.
  * Returns 0 on success and -1 on error.
  */
-int write_entry(SFS *sfs, struct sfs_entry *entry)
+static int write_entry(SFS *sfs, struct sfs_entry *entry)
 {
     printf("=== WRITING ENTRY ===\n");
     int num_cont = get_num_cont(entry);
@@ -1018,7 +1018,7 @@ struct sfs_block_list **find_delfile(pfree_list, delfile)
     return pfree;
 }
 
-void delete_entries(pfree_list, from, to)
+static void delete_entries(pfree_list, from, to)
     struct sfs_block_list **pfree_list;
     struct sfs_entry *from;
     struct sfs_entry *to;
@@ -1071,7 +1071,7 @@ struct sfs_entry *insert_unused(sfs, offset, n, tail)
  * The remaining (l - k) is filled with unused entries.
  * If the space could not be found, -1 is returned, otherwise 0 is returned.
  */
-int insert_entry(struct sfs *sfs, struct sfs_entry *new_entry)
+static int insert_entry(struct sfs *sfs, struct sfs_entry *new_entry)
 {
     printf("=== INSERT ENTRY ===\n");
     int space_needed = 1 + get_num_cont(new_entry); // in number of simple entries
@@ -1122,7 +1122,7 @@ int insert_entry(struct sfs *sfs, struct sfs_entry *new_entry)
  * The entry is written to the Index Area after the start marker.
  * On success 0 is returned, -1 on error.
  */
-int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
+static int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
 {
     printf("=== PREPEND ENTRY ===\n");
     struct sfs_entry *start = sfs->entry_list;
@@ -1158,7 +1158,7 @@ int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
         }
         sfs->super->index_size = new_isz;
         printf("\tupdate index size: 0x%06lx\n", new_isz);
-        sfs_write_super(sfs->file, sfs->super);
+        write_super(sfs->file, sfs->super);
     } else {
         fprintf(stderr, "prepend_entry: free list error\n");
         return -1;
@@ -1189,7 +1189,7 @@ int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
  * -> on success returns 0
  *    otherwise returns -1
  */
-int put_new_entry(struct sfs *sfs, struct sfs_entry *new_entry)
+static int put_new_entry(struct sfs *sfs, struct sfs_entry *new_entry)
 {
     if (insert_entry(sfs, new_entry) != 0) {
         return prepend_entry(sfs, new_entry);
@@ -1198,7 +1198,7 @@ int put_new_entry(struct sfs *sfs, struct sfs_entry *new_entry)
 }
 
 // check if path valid and does not exist
-int check_valid_new(struct sfs *sfs, char *path)
+static int check_valid_new(struct sfs *sfs, char *path)
 {
     printf("check valid as new \"%s\"s:", path);
     // if path exists, not valid as a new name
@@ -1253,7 +1253,7 @@ int sfs_mkdir(struct sfs *sfs, const char *path)
     }
     dir_entry->data.dir_data = malloc(sizeof(struct sfs_dir));
     dir_entry->data.dir_data->num_cont = num_cont;
-    dir_entry->data.dir_data->time_stamp = sfs_make_time_stamp();
+    dir_entry->data.dir_data->time_stamp = make_time_stamp();
     dir_entry->data.dir_data->name = strdup(fxpath);
 
     if (put_new_entry(sfs, dir_entry) == -1) {
@@ -1285,7 +1285,7 @@ int sfs_create(struct sfs *sfs, const char *path)
 
     file_entry->data.file_data = malloc(sizeof(struct sfs_file));
     file_entry->data.file_data->num_cont = num_cont;
-    file_entry->data.file_data->time_stamp = sfs_make_time_stamp();
+    file_entry->data.file_data->time_stamp = make_time_stamp();
     file_entry->data.file_data->start_block = sfs->super->rsvd_blocks;
     file_entry->data.file_data->end_block = sfs->super->rsvd_blocks - 1;
     file_entry->data.file_data->file_len = 0;
@@ -1343,7 +1343,7 @@ int sfs_rmdir(struct sfs *sfs, const char *path)
 }
 
 /* Insert a deleted file into the free list */
-void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
+static void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
 {
     struct sfs_block_list **p = &sfs->free_list;
     while ((*p) != NULL) {
@@ -1362,7 +1362,7 @@ void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
 }
 
 // assume that the entry can be deleted
-void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
+static void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
 {
     struct sfs_entry **p_entry = &sfs->entry_list;
     int entry_length = 1 + get_num_cont(entry);
@@ -1405,7 +1405,7 @@ int sfs_delete(struct sfs *sfs, const char *path)
 
 int sfs_get_sfs_time(SFS *sfs, struct timespec *timespec)
 {
-    sfs_fill_timespec(sfs->super->time_stamp, timespec);
+    fill_timespec(sfs->super->time_stamp, timespec);
     return 0;
 }
 
@@ -1418,7 +1418,7 @@ int sfs_get_dir_time(SFS *sfs, const char *path, struct timespec *timespec)
         fprintf(stderr, "directory \"%s\" does not exists\n", fxpath);
         return -1;
     }
-    sfs_fill_timespec(entry->data.dir_data->time_stamp, timespec);
+    fill_timespec(entry->data.dir_data->time_stamp, timespec);
     return 0;
 }
 
@@ -1431,7 +1431,7 @@ int sfs_get_file_time(SFS *sfs, const char *path, struct timespec *timespec)
         fprintf(stderr, "file \"%s\" does not exists\n", fxpath);
         return -1;
     }
-    sfs_fill_timespec(entry->data.file_data->time_stamp, timespec);
+    fill_timespec(entry->data.file_data->time_stamp, timespec);
     return 0;
 }
 
@@ -1456,7 +1456,7 @@ int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec)
     return write_entry(sfs, entry);
 }
 
-void rename_entry(struct sfs_entry *entry, char *name)
+static void rename_entry(struct sfs_entry *entry, char *name)
 {
     switch (entry->type) {
     case SFS_ENTRY_DIR:
@@ -1476,7 +1476,7 @@ void rename_entry(struct sfs_entry *entry, char *name)
  * <source_path> with <dest_path>.  Write everything to index area.
  * Return 0 on success and -1 on error.
  */
-int move_dir(sfs, source_path, dest_path)
+static int move_dir(sfs, source_path, dest_path)
     struct sfs *sfs;
     char *source_path;
     char *dest_path;
@@ -1628,7 +1628,7 @@ struct sfs_block_list **free_list_find(sfs, start_block, length)
     return NULL;
 }
 
-int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
+static int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
 {
     struct sfs_block_list **p = free_list_find(sfs, start, len);
     if (*p == NULL) {
@@ -1648,7 +1648,7 @@ int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
     return 0;
 }
 
-int free_list_del(SFS *sfs, struct sfs_block_list **p_from, uint64_t length)
+static int free_list_del(SFS *sfs, struct sfs_block_list **p_from, uint64_t length)
 {
     uint64_t rest = length;
     struct sfs_block_list **p = p_from;

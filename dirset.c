@@ -6,7 +6,7 @@
 
 #define SFS_DIRSET_SZ 0x10
 
-struct sfs_dirset_list **sfs_dirset_init()
+struct sfs_dirset_list **dirset_init()
 {
     return calloc(SFS_DIRSET_SZ, sizeof(struct sfs_dirset_list));
 }
@@ -22,7 +22,7 @@ static int hash(char *name)
     return result % SFS_DIRSET_SZ;
 }
 
-void sfs_dirset_put(struct sfs_dirset_list **sfs_dirset_list, char *name)
+void dirset_put(struct sfs_dirset_list **sfs_dirset_list, char *name)
 {
     int index = hash(name);
     struct sfs_dirset_list *dirset_list = malloc(sizeof(dirset_list));
@@ -33,7 +33,7 @@ void sfs_dirset_put(struct sfs_dirset_list **sfs_dirset_list, char *name)
     sfs_dirset_list[index] = dirset_list;
 }
 
-int sfs_dirset_get(struct sfs_dirset_list **sfs_dirset_list, char *name)
+int dirset_get(struct sfs_dirset_list **sfs_dirset_list, char *name)
 {
     struct sfs_dirset_list *dirset_list = sfs_dirset_list[hash(name)];
     while (dirset_list != NULL) {
@@ -44,7 +44,7 @@ int sfs_dirset_get(struct sfs_dirset_list **sfs_dirset_list, char *name)
     return 0;
 }
 
-void sfs_dirset_del(struct sfs_dirset_list **sfs_dirset_list, char *name)
+void dirset_del(struct sfs_dirset_list **sfs_dirset_list, char *name)
 {
     struct sfs_dirset_list *tmp;
     struct sfs_dirset_list **p = &sfs_dirset_list[hash(name)];
@@ -60,7 +60,7 @@ void sfs_dirset_del(struct sfs_dirset_list **sfs_dirset_list, char *name)
     }
 }
 
-void sfs_dirset_free(struct sfs_dirset_list **sfs_dirset_list)
+void dirset_free(struct sfs_dirset_list **sfs_dirset_list)
 {
     free (sfs_dirset_list);
 }
