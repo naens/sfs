@@ -697,21 +697,12 @@ int sfs_terminate(SFS *sfs)
     return 0;
 }
 
-static char *fix_name(const char *path)
-{
-    char *result = (char *)path;
-    while (*result == '/')
-        result++;
-    return result;
-}
-
 uint64_t sfs_get_file_size(SFS *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
     struct sfs_entry *entry = sfs->entry_list;
     while (entry != NULL) {
         if (entry->type == SFS_ENTRY_FILE
-                && strcmp(fxpath, entry->data.file_data->name) == 0) {
+                && strcmp(path, entry->data.file_data->name) == 0) {
             return entry->data.file_data->file_len;
         }
         entry = entry->next;
@@ -720,7 +711,7 @@ uint64_t sfs_get_file_size(SFS *sfs, const char *path)
 }
 
 // do not return deleted files and directories
-struct sfs_entry *get_entry_by_name(SFS *sfs, char *path) {
+struct sfs_entry *get_entry_by_name(SFS *sfs, const char *path) {
     struct sfs_entry *entry = sfs->entry_list;
     while (entry != NULL) {
         switch (entry->type) {
@@ -740,7 +731,7 @@ struct sfs_entry *get_entry_by_name(SFS *sfs, char *path) {
     return NULL;
 }
 
-struct sfs_entry *get_dir_by_name(SFS *sfs, char *path) {
+struct sfs_entry *get_dir_by_name(SFS *sfs, const char *path) {
     struct sfs_entry *entry = sfs->entry_list;
     while (entry != NULL) {
         if (entry->type == SFS_ENTRY_DIR
@@ -752,7 +743,7 @@ struct sfs_entry *get_dir_by_name(SFS *sfs, char *path) {
     return NULL;
 }
 
-struct sfs_entry *get_file_by_name(SFS *sfs, char *path) {
+struct sfs_entry *get_file_by_name(SFS *sfs, const char *path) {
     struct sfs_entry *entry = sfs->entry_list;
     while (entry != NULL) {
         if (entry->type == SFS_ENTRY_FILE
@@ -766,9 +757,8 @@ struct sfs_entry *get_file_by_name(SFS *sfs, char *path) {
 
 int sfs_is_dir(SFS *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
-//    printf("@@@@\tsfs_is_dir: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = get_dir_by_name(sfs, fxpath);
+//    printf("@@@@\tsfs_is_dir: name=\"%s\"\n", path);
+    struct sfs_entry *entry = get_dir_by_name(sfs, path);
     if (entry != NULL) {
         return 1;
     } else {
@@ -778,9 +768,8 @@ int sfs_is_dir(SFS *sfs, const char *path)
 
 int sfs_is_file(SFS *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
-//    printf("@@@@\tsfs_is_file: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+//    printf("@@@@\tsfs_is_file: name=\"%s\"\n", path);
+    struct sfs_entry *entry = get_file_by_name(sfs, path);
     if (entry != NULL) {
         return 1;
     } else {
@@ -788,7 +777,7 @@ int sfs_is_file(SFS *sfs, const char *path)
     }
 }
 
-struct sfs_entry *find_entry_from(struct sfs_entry *entry, char *path)
+struct sfs_entry *find_entry_from(struct sfs_entry *entry, const char *path)
 {
     int len = strlen(path);
     while (entry != NULL) {
@@ -812,9 +801,9 @@ struct sfs_entry *find_entry_from(struct sfs_entry *entry, char *path)
     return NULL;
 }
 
-static char *get_basename(char *full_name)
+static const char *get_basename(const char *full_name)
 {
-    char *p = full_name;
+    const char *p = full_name;
     int i = 0;
     int last_slash = -1;
     while (p[i] != 0) {
@@ -826,7 +815,7 @@ static char *get_basename(char *full_name)
     return &p[last_slash + 1];
 }
 
-static char *get_entry_basename(struct sfs_entry *entry)
+static const char *get_entry_basename(struct sfs_entry *entry)
 {
     switch (entry->type) {
     case SFS_ENTRY_DIR:
@@ -840,10 +829,9 @@ static char *get_entry_basename(struct sfs_entry *entry)
     }
 }
 
-char *sfs_first(SFS *sfs, const char *path)
+const char *sfs_first(SFS *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
-    struct sfs_entry *entry = find_entry_from(sfs->entry_list, fxpath);
+    struct sfs_entry *entry = find_entry_from(sfs->entry_list, path);
     if (entry != NULL) {
         sfs->iter_curr = entry->next;
         return get_entry_basename(entry);
@@ -852,10 +840,9 @@ char *sfs_first(SFS *sfs, const char *path)
     return NULL;
 }
 
-char *sfs_next(SFS *sfs, const char *path)
+const char *sfs_next(SFS *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
-    struct sfs_entry *entry = find_entry_from(sfs->iter_curr, fxpath);
+    struct sfs_entry *entry = find_entry_from(sfs->iter_curr, path);
     if (entry != NULL) {
         sfs->iter_curr = entry->next;
         return get_entry_basename(entry);
@@ -866,9 +853,8 @@ char *sfs_next(SFS *sfs, const char *path)
 
 int sfs_read(SFS *sfs, const char *path, char *buf, size_t size, off_t offset)
 {
-    char *fxpath = fix_name(path);
-//    printf("@@@@\tsfs_read: path=\"%s\", size:0x%lx, offset:0x%lx\n", fxpath, size, offset);
-    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+//    printf("@@@@\tsfs_read: path=\"%s\", size:0x%lx, offset:0x%lx\n", path, size, offset);
+    struct sfs_entry *entry = get_file_by_name(sfs, path);
     if (entry != NULL) {
         uint64_t sz;		// number of bytes to be read
         uint64_t len = entry->data.file_data->file_len;
@@ -1198,7 +1184,7 @@ static int put_new_entry(struct sfs *sfs, struct sfs_entry *new_entry)
 }
 
 // check if path valid and does not exist
-static int check_valid_new(struct sfs *sfs, char *path)
+static int check_valid_new(struct sfs *sfs, const char *path)
 {
     printf("check valid as new \"%s\"s:", path);
     // if path exists, not valid as a new name
@@ -1209,7 +1195,7 @@ static int check_valid_new(struct sfs *sfs, char *path)
     }
 
     int path_len = strlen(path);
-    char *basename = get_basename(path);
+    const char *basename = get_basename(path);
     int basename_len = strlen(basename);
     if (basename_len == 0) {
         printf(" empty basename\n");
@@ -1235,10 +1221,9 @@ static int check_valid_new(struct sfs *sfs, char *path)
 
 int sfs_mkdir(struct sfs *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
-    int path_len = strlen(fxpath);
-    printf("@@@\tsfs_mkdir: create new directory \"%s\"\n", fxpath);
-    if (!check_valid_new(sfs, fxpath)) {
+    int path_len = strlen(path);
+    printf("@@@\tsfs_mkdir: create new directory \"%s\"\n", path);
+    if (!check_valid_new(sfs, path)) {
         return -1;
     }
 
@@ -1254,7 +1239,7 @@ int sfs_mkdir(struct sfs *sfs, const char *path)
     dir_entry->data.dir_data = malloc(sizeof(struct sfs_dir));
     dir_entry->data.dir_data->num_cont = num_cont;
     dir_entry->data.dir_data->time_stamp = make_time_stamp();
-    dir_entry->data.dir_data->name = strdup(fxpath);
+    dir_entry->data.dir_data->name = strdup(path);
 
     if (put_new_entry(sfs, dir_entry) == -1) {
         printf("\tsfs_mkdir put new entry error\n");
@@ -1266,10 +1251,9 @@ int sfs_mkdir(struct sfs *sfs, const char *path)
 
 int sfs_create(struct sfs *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
-    int path_len = strlen(fxpath);
-    printf("@@@\tsfs_create: create new empty file \"%s\"\n", fxpath);
-    if (!check_valid_new(sfs, fxpath)) {
+    int path_len = strlen(path);
+    printf("@@@\tsfs_create: create new empty file \"%s\"\n", path);
+    if (!check_valid_new(sfs, path)) {
         return -1;
     }
 
@@ -1289,7 +1273,7 @@ int sfs_create(struct sfs *sfs, const char *path)
     file_entry->data.file_data->start_block = sfs->super->rsvd_blocks;
     file_entry->data.file_data->end_block = sfs->super->rsvd_blocks - 1;
     file_entry->data.file_data->file_len = 0;
-    file_entry->data.file_data->name = strdup(fxpath);
+    file_entry->data.file_data->name = strdup(path);
 
     if (put_new_entry(sfs, file_entry) == -1) {
         printf("\tsfs_file put new entry error\n");
@@ -1299,7 +1283,7 @@ int sfs_create(struct sfs *sfs, const char *path)
     return 0;
 }
 
-int sfs_is_dir_empty(struct sfs *sfs, char *path) {
+static int is_dir_empty(struct sfs *sfs, const char *path) {
     struct sfs_entry *entry = sfs->entry_list;
     int path_len = strlen(path);
     while (entry != NULL) {
@@ -1318,15 +1302,14 @@ int sfs_is_dir_empty(struct sfs *sfs, char *path) {
 
 int sfs_rmdir(struct sfs *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_rmdir: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = get_dir_by_name(sfs, fxpath);
+    printf("@@@@\tsfs_rmdir: name=\"%s\"\n", path);
+    struct sfs_entry *entry = get_dir_by_name(sfs, path);
     if (entry == NULL) {
-        fprintf(stderr, "no directory \"%s\" exists\n", fxpath);
+        fprintf(stderr, "no directory \"%s\" exists\n", path);
         return -1;
     }
-    if (!sfs_is_dir_empty(sfs, fxpath)) {
-        fprintf(stderr, "directory \"%s\" is not empty\n", fxpath);
+    if (!is_dir_empty(sfs, path)) {
+        fprintf(stderr, "directory \"%s\" is not empty\n", path);
         return -1;
     }
     /* Deleted children: do not remove, unreachable
@@ -1335,7 +1318,7 @@ int sfs_rmdir(struct sfs *sfs, const char *path)
      */
     entry->type = SFS_ENTRY_DIR_DEL;
     if (write_entry(sfs, entry) == 0) {
-        printf("\trmdir(%s): ok\n", fxpath);
+        printf("\trmdir(%s): ok\n", path);
         return 0;
     } else {
         return -1;
@@ -1379,11 +1362,10 @@ static void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
 
 int sfs_delete(struct sfs *sfs, const char *path)
 {
-    char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_delete: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+    printf("@@@@\tsfs_delete: name=\"%s\"\n", path);
+    struct sfs_entry *entry = get_file_by_name(sfs, path);
     if (entry == NULL) {
-        fprintf(stderr, "file \"%s\" does not exists\n", fxpath);
+        fprintf(stderr, "file \"%s\" does not exists\n", path);
         return -1;
     }
 
@@ -1396,7 +1378,7 @@ int sfs_delete(struct sfs *sfs, const char *path)
     entry->type = SFS_ENTRY_FILE_DEL;
     free_list_insert(sfs, entry);
     if (write_entry(sfs, entry) == 0) {
-        printf("\tdelete(%s): ok\n", fxpath);
+        printf("\tdelete(%s): ok\n", path);
         return 0;
     } else {
         return -1;
@@ -1411,11 +1393,10 @@ int sfs_get_sfs_time(SFS *sfs, struct timespec *timespec)
 
 int sfs_get_dir_time(SFS *sfs, const char *path, struct timespec *timespec)
 {
-    char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_get_dir_time: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = get_dir_by_name(sfs, fxpath);
+    printf("@@@@\tsfs_get_dir_time: name=\"%s\"\n", path);
+    struct sfs_entry *entry = get_dir_by_name(sfs, path);
     if (entry == NULL) {
-        fprintf(stderr, "directory \"%s\" does not exists\n", fxpath);
+        fprintf(stderr, "directory \"%s\" does not exists\n", path);
         return -1;
     }
     fill_timespec(entry->data.dir_data->time_stamp, timespec);
@@ -1424,11 +1405,10 @@ int sfs_get_dir_time(SFS *sfs, const char *path, struct timespec *timespec)
 
 int sfs_get_file_time(SFS *sfs, const char *path, struct timespec *timespec)
 {
-    char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_get_file_time: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+    printf("@@@@\tsfs_get_file_time: name=\"%s\"\n", path);
+    struct sfs_entry *entry = get_file_by_name(sfs, path);
     if (entry == NULL) {
-        fprintf(stderr, "file \"%s\" does not exists\n", fxpath);
+        fprintf(stderr, "file \"%s\" does not exists\n", path);
         return -1;
     }
     fill_timespec(entry->data.file_data->time_stamp, timespec);
@@ -1437,11 +1417,10 @@ int sfs_get_file_time(SFS *sfs, const char *path, struct timespec *timespec)
 
 int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec)
 {
-    char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_set_time: name=\"%s\"\n", fxpath);
-    struct sfs_entry *entry = get_entry_by_name(sfs, fxpath);
+    printf("@@@@\tsfs_set_time: name=\"%s\"\n", path);
+    struct sfs_entry *entry = get_entry_by_name(sfs, path);
     if (entry == NULL) {
-        fprintf(stderr, "File or directory\"%s\" does not exists\n", fxpath);
+        fprintf(stderr, "File or directory\"%s\" does not exists\n", path);
         return -1;
     }
     uint64_t time_stamp = timespec_to_time_stamp(timespec);
@@ -1478,8 +1457,8 @@ static void rename_entry(struct sfs_entry *entry, char *name)
  */
 static int move_dir(sfs, source_path, dest_path)
     struct sfs *sfs;
-    char *source_path;
-    char *dest_path;
+    const char *source_path;
+    const char *dest_path;
 {
     struct sfs_entry *entry = sfs->entry_list;
     int src_len = strlen(source_path);
@@ -1518,25 +1497,23 @@ int sfs_rename(sfs, source_path, dest_path, replace)
     const char *dest_path;
     int replace;
 {
-    char *fx_source = fix_name(source_path);
-    char *fx_dest = fix_name(dest_path);
-    printf("@@@@\tsfs_rename: \"%s\"->\"%s\"\n", fx_source, fx_dest);
-    if (strcmp(fx_source, fx_dest) == 0) {
+    printf("@@@@\tsfs_rename: \"%s\"->\"%s\"\n", source_path, dest_path);
+    if (strcmp(source_path, dest_path) == 0) {
         return 0;
     }
-    struct sfs_entry *entry = get_entry_by_name(sfs, fx_source);
+    struct sfs_entry *entry = get_entry_by_name(sfs, source_path);
     if (entry == NULL) {
-        fprintf(stderr, "Source \"%s\" does not exist\n", fx_source);
+        fprintf(stderr, "Source \"%s\" does not exist\n", source_path);
         return -1;
     }
-    if (!check_valid_new(sfs, fx_dest)) {
+    if (!check_valid_new(sfs, dest_path)) {
         fprintf(stderr, "Destination name not valid\n");
         return -1;
     }
-    struct sfs_entry *dest_entry = get_entry_by_name(sfs, fx_dest);
+    struct sfs_entry *dest_entry = get_entry_by_name(sfs, dest_path);
     if (dest_entry != NULL) {
         if (replace == 0) {
-            fprintf(stderr, "Cannot replace existing file \"%s\"\n", fx_dest);
+            fprintf(stderr, "Cannot replace existing file \"%s\"\n", dest_path);
             return -1;
         } else {
             if (entry->type != dest_entry->type) {
@@ -1545,8 +1522,8 @@ int sfs_rename(sfs, source_path, dest_path, replace)
             }
             if (dest_entry->type == SFS_ENTRY_DIR) {
                 // check if directory is empty
-                if (!sfs_is_dir_empty(sfs, fx_dest)) {
-                    fprintf(stderr, "directory \"%s\" is not empty\n", fx_dest);
+                if (!is_dir_empty(sfs, dest_path)) {
+                    fprintf(stderr, "directory \"%s\" is not empty\n", dest_path);
                     return -1;
                 }
             } 
@@ -1555,11 +1532,11 @@ int sfs_rename(sfs, source_path, dest_path, replace)
         }
     }
     if (entry->type == SFS_ENTRY_DIR) {
-        if (move_dir(sfs, fx_source, fx_dest) != 0) {
+        if (move_dir(sfs, source_path, dest_path) != 0) {
             return -1;
         }
     } else if (entry->type == SFS_ENTRY_FILE) {
-        rename_entry(entry, strdup(fx_dest));
+        rename_entry(entry, strdup(dest_path));
         if (write_entry(sfs, entry) != 0) {
             return -1;
         }
@@ -1569,9 +1546,8 @@ int sfs_rename(sfs, source_path, dest_path, replace)
 
 int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t offset)
 {
-    char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_write: path=\"%s\", size:0x%lx, offset:0x%lx\n", fxpath, size, offset);
-    struct sfs_entry *entry = get_file_by_name(sfs, fxpath);
+    printf("@@@@\tsfs_write: path=\"%s\", size:0x%lx, offset:0x%lx\n", path, size, offset);
+    struct sfs_entry *entry = get_file_by_name(sfs, path);
     if (entry != NULL) {
         uint64_t sz;		// number of bytes to write
         uint64_t len = entry->data.file_data->file_len;
@@ -1710,15 +1686,14 @@ static int free_list_del(SFS *sfs, struct sfs_block_list **p_from, uint64_t leng
 int sfs_resize(SFS *sfs, const char *path, off_t len)
 {
     const uint64_t bs = sfs->block_size;
-    char *fxpath = fix_name(path);
-    printf("@@@@\tsfs_resize: name=\"%s\" length=%ld\n", fxpath, len);
-    struct sfs_entry *file_entry = get_file_by_name(sfs, fxpath);
+    printf("@@@@\tsfs_resize: name=\"%s\" length=%ld\n", path, len);
+    struct sfs_entry *file_entry = get_file_by_name(sfs, path);
     if (file_entry == NULL) {
-        fprintf(stderr, "file \"%s\" does not exists\n", fxpath);
+        fprintf(stderr, "file \"%s\" does not exists\n", path);
         return -1;
     }
     if (file_entry->type != SFS_ENTRY_FILE) {
-        fprintf(stderr, "\"%s\" is not a file\n", fxpath);
+        fprintf(stderr, "\"%s\" is not a file\n", path);
         return -1;
     }
     const uint64_t l0 = file_entry->data.file_data->file_len;
