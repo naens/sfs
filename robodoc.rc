@@ -1,0 +1,9 @@
+items:
+	NAME
+	DESCRIPTION
+	PARAMETERS
+	FIELDS
+	RETURN VALUE
+accept files:
+	*.c
+	*.h

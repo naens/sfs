@@ -19,8 +19,8 @@ fuse: sfs_fuse
 
 .PHONY: docs
 docs: sfs.c sfs_tool.c
-	robodoc --src ./ --doc ./docs --html --multidoc --nodesc \
-			--sections --tell --toc --index
+	robodoc --src ./ --doc ./docs --html --multidoc \ #--rc robodoc.rc \
+			--nodesc --sections --tell --toc --index
 	mv docs/masterindex.html docs/index.html
 
 .PHONY: troff

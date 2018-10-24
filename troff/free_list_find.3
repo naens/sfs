@@ -1,0 +1,18 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH free_list_find 3 "Oct 24, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBfree_list_find\fR \-\- find consecutive free block in the free list
+
+.SH DESCRIPTION
+Finds consecutive block entries starting from *start_block*\.
+
+.SH PARAMETERS
+SFS \- the SFS structure variable
+sfart_block \- the minimum block number for the consecutive blocks
+length \- minimum length of the consecutive blocks
+
+.SH RETURN VALUE
+Returns a pointer to pointer to the found block or NULL if could not find\.

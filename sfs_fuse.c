@@ -19,12 +19,12 @@
 #define RENAME_EXCHANGE (1 << 1)
 #endif
 
-/****p* sfs/sfs_fuse
+/****h* sfs/sfs_fuse
  *  NAME
  *    sfs_fuse -- FUSE interface for the sfs implementation
  *  DESCRIPTION
  *    FUSE interface implementing severatl FUSE functions.
- ****
+ ******
  */
 
 static SFS *sfs;

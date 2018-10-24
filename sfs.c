@@ -26,6 +26,31 @@
 #define SFS_DIR_NAME_LEN 53
 #define SFS_FILE_NAME_LEN 29
 
+/****h* sfs/sfs
+ * NAME
+ *   sfs -- SFS implementation
+ * DESCRIPTION
+ *   Simple implementation of the SFS file system.
+ ******
+ */
+
+/****s*	sfs/sfs_super
+ * NAME
+ *   struct sfs_super -- structure for the superblock of the file system
+ * DESCRIPTION
+ *   The structure *struct sfs_super* is read from the superblock of the
+ *   file system and contains information about it.
+ * FIELDS
+ *   time_stamp - date/time when the volume was changed
+ *   data_size - size of the Data Area in blocks
+ *   index_size - size of the Index Area in bytes
+ *   total_blocks - total size of the filesystem in blocks
+ *   resvd_blocks - number of bytes used by the Superblock and by
+ *                  the Reserved Area, indicates the first block of the
+ *                  Data Area
+ *   block_size - number of bytes in a block
+ ******
+ */
 struct sfs_super {
     int64_t time_stamp;
     uint64_t data_size;
@@ -55,20 +80,20 @@ struct sfs {
 };
 
 /* The Volume ID Entry Data */
-struct sfs_vol {
+struct volume_data {
     int64_t time_stamp;
     char *name;
 };
 
 /* The Directory Entry Data */
-struct sfs_dir {
+struct dir_data {
     uint8_t num_cont;
     int64_t time_stamp;
     char *name;
 };
 
 /* The File Entry Data */
-struct sfs_file {
+struct file_data {
     uint8_t num_cont;
     int64_t time_stamp;
     uint64_t start_block;
@@ -78,7 +103,7 @@ struct sfs_file {
 };
 
 /* The Unusable Entry Data */
-struct sfs_unusable {
+struct unusable_data {
     uint64_t start_block;
     uint64_t end_block;
 };
@@ -87,72 +112,12 @@ struct sfs_entry {
     uint8_t type;
     long int offset;
     union {
-        struct sfs_vol *volume_data;
-        struct sfs_dir *dir_data;
-        struct sfs_file *file_data;
-        struct sfs_unusable *unusable_data;
+        struct volume_data *volume_data;
+        struct dir_data *dir_data;
+        struct file_data *file_data;
+        struct unusable_data *unusable_data;
     } data;
     struct sfs_entry *next;
-};
-
-/* The Volume ID Entry */
-struct sfs_volume {
-    uint8_t type;
-    uint8_t crc;
-    uint16_t resvd;
-    int64_t time_stamp;
-    uint8_t name[SFS_VOL_NAME_LEN];
-};
-
-/* The Start Marker Entry */
-struct S_SFS_START {
-    uint8_t type;
-    uint8_t crc;
-    uint8_t resvd[62];
-};
-
-/* The Unused Entry */
-struct S_SFS_UNUSED {
-    uint8_t type;
-    uint8_t crc;
-    uint8_t resvd[62];
-};
-
-/* The Directory Entry */
-struct S_SFS_DIR {
-    uint8_t type;
-    uint8_t crc;
-    uint8_t num_cont;
-    uint8_t *name;
-    int64_t time_stamp;
-};
-
-/* The File Entry */
-struct S_SFS_FILE {
-    uint8_t type;
-    uint8_t crc;
-    uint8_t num_cont;
-    int64_t time_stamp;
-    long f_offset;
-    uint64_t start_block;
-    uint64_t end_block;
-    uint64_t file_len;
-    FILE *file;
-    char *file_buf;
-    uint8_t *name;
-    int del_number;
-    struct sfs *sfs;
-};
-
-/* The Unusable Entry */
-struct S_SFS_UNUSABLE {
-    uint8_t type;
-    uint8_t crc;
-    long f_offset;
-    uint8_t resv0[8];
-    uint64_t start_block;
-    uint64_t end_block;
-    uint8_t resv1[38];
 };
 
 static uint64_t timespec_to_time_stamp(struct timespec *timespec)
@@ -265,7 +230,7 @@ static void write_super(FILE *file, struct sfs_super *super) {
 
 static struct sfs_entry *read_volume_data(uint8_t *buf, struct sfs_entry *entry)
 {
-    struct sfs_vol *volume_data = malloc(sizeof(struct sfs_vol));
+    struct volume_data *volume_data = malloc(sizeof(struct volume_data));
     uint8_t *cbuf = buf + 4; /* skip type, crc, and resvd */
     memcpy(&volume_data->time_stamp, cbuf, sizeof(volume_data->time_stamp));
     cbuf += sizeof(volume_data->time_stamp);
@@ -281,7 +246,7 @@ static struct sfs_entry *read_volume_data(uint8_t *buf, struct sfs_entry *entry)
 static struct sfs_entry *read_dir_data(uint8_t *buf, struct sfs_entry *entry, FILE *file)
 {
     uint8_t *b = buf;
-    struct sfs_dir *dir_data = malloc(sizeof(struct sfs_dir));
+    struct dir_data *dir_data = malloc(sizeof(struct dir_data));
 
     memcpy(&dir_data->num_cont, &buf[2], 1);
     memcpy(&dir_data->time_stamp, &buf[3], 8);
@@ -310,7 +275,7 @@ static struct sfs_entry *read_dir_data(uint8_t *buf, struct sfs_entry *entry, FI
 static struct sfs_entry *read_file_data(uint8_t *buf, struct sfs_entry *entry, FILE *file)
 {
     uint8_t *b = buf;
-    struct sfs_file *file_data = malloc(sizeof(struct sfs_file));
+    struct file_data *file_data = malloc(sizeof(struct file_data));
 
     memcpy(&file_data->num_cont, &buf[2], 1);
     memcpy(&file_data->time_stamp, &buf[3], 8);
@@ -341,7 +306,7 @@ static struct sfs_entry *read_file_data(uint8_t *buf, struct sfs_entry *entry, F
 
 static struct sfs_entry *read_unusable_data(uint8_t *buf, struct sfs_entry *entry)
 {
-    struct sfs_unusable *unusable_data = malloc(sizeof(struct sfs_unusable));
+    struct unusable_data *unusable_data = malloc(sizeof(struct unusable_data));
     memcpy(&unusable_data->start_block, &buf[10], 8);
     memcpy(&unusable_data->end_block, &buf[18], 8);
     entry->data.unusable_data = unusable_data;
@@ -904,13 +869,13 @@ static int get_entry_usable_space(struct sfs_entry *entry)
     }
 }
 
-static void write_volume_data(char *buf, struct sfs_vol *vol_data)
+static void write_volume_data(char *buf, struct volume_data *vol_data)
 {
     memcpy(&buf[4], &vol_data->time_stamp, 8);
     strncpy(&buf[12], vol_data->name, SFS_VOL_NAME_LEN);
 }
 
-static void write_dir_data(char *buf, struct sfs_dir *dir_data)
+static void write_dir_data(char *buf, struct dir_data *dir_data)
 {
     memcpy(&buf[2], &dir_data->num_cont, 1);
     memcpy(&buf[3], &dir_data->time_stamp, 8);
@@ -918,7 +883,7 @@ static void write_dir_data(char *buf, struct sfs_dir *dir_data)
     strncpy(&buf[11], dir_data->name, max_len);
 }
 
-static void write_file_data(char *buf, struct sfs_file *file_data)
+static void write_file_data(char *buf, struct file_data *file_data)
 {
     memcpy(&buf[2], &file_data->num_cont, 1);
     memcpy(&buf[3], &file_data->time_stamp, 8);
@@ -929,7 +894,7 @@ static void write_file_data(char *buf, struct sfs_file *file_data)
     strncpy(&buf[35], file_data->name, max_len);
 }
 
-static void write_unusable_data(char *buf, struct sfs_unusable *unusable_data)
+static void write_unusable_data(char *buf, struct unusable_data *unusable_data)
 {
     memcpy(&buf[10], &unusable_data->start_block, 8);
     memcpy(&buf[18], &unusable_data->end_block, 8);
@@ -1236,7 +1201,7 @@ int sfs_mkdir(struct sfs *sfs, const char *path)
         int cont_str_len = path_len - SFS_DIR_NAME_LEN + 1;
         num_cont = (cont_str_len + SFS_ENTRY_SIZE - 1) / SFS_ENTRY_SIZE;
     }
-    dir_entry->data.dir_data = malloc(sizeof(struct sfs_dir));
+    dir_entry->data.dir_data = malloc(sizeof(struct dir_data));
     dir_entry->data.dir_data->num_cont = num_cont;
     dir_entry->data.dir_data->time_stamp = make_time_stamp();
     dir_entry->data.dir_data->name = strdup(path);
@@ -1267,7 +1232,7 @@ int sfs_create(struct sfs *sfs, const char *path)
         num_cont = (cont_str_len + SFS_ENTRY_SIZE - 1) / SFS_ENTRY_SIZE;
     }
 
-    file_entry->data.file_data = malloc(sizeof(struct sfs_file));
+    file_entry->data.file_data = malloc(sizeof(struct file_data));
     file_entry->data.file_data->num_cont = num_cont;
     file_entry->data.file_data->time_stamp = make_time_stamp();
     file_entry->data.file_data->start_block = sfs->super->rsvd_blocks;
@@ -1580,6 +1545,38 @@ int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t of
     }
 }
 
+/****f* sfs/free_list_find
+ *  NAME
+ *    free_list_find -- find consecutive free block in the free list
+ *  DESCRIPTION
+ *    Finds consecutive block entries starting from *start_block*.
+ *  PARAMETERS
+ *    SFS - the SFS structure variable
+ *    sfart_block - the minimum block number for the consecutive blocks
+ *    length - minimum length of the consecutive blocks
+ *  RETURN VALUE
+ *    Returns a pointer to pointer to the found block or NULL if could not find.
+ ******
+ * Pseudocode:
+ *   p: pointer to pointer to the current item, initialized to the free list
+ *   pfirst: pointer to pointer to the first item of the consecutive blocks
+ *           initialized to the free list
+ *   tot: the number of blocks found so far
+ *   next: the expected start of the next entry if there are no gaps
+ *
+ *   do while not at end and not enough blocks in tot:
+ *      if next <> current start block then	// means there is a gap
+ *        *pfirst = p	// set the first block found to current
+ *        tot = 0       // what was found was not enough, starting again
+ *      end if
+ *      tot += (*p)->length
+ *      next = (*p)->start_block + (*p)->length
+ *      set p to next
+ *   continue
+ *   if tot >= length then return pfirst        // found => return
+ *   return NULL      // not found
+ * end pseudocode
+ */
 struct sfs_block_list **free_list_find(sfs, start_block, length)
     SFS *sfs;
     uint64_t start_block;
@@ -1604,12 +1601,32 @@ struct sfs_block_list **free_list_find(sfs, start_block, length)
     return NULL;
 }
 
+/****f* sfs/free_list_add
+ *  NAME
+ *    free_list_add -- add free block to the free list
+ *  DESCRIPTION
+ *    Adds new blocks into the free list.  If the blocks are before and/or
+ *    after existing free list entries, the entries are merged.
+ *  PARAMETERS
+ *    SFS - the SFS structure variable
+ *    start - the block where the new free area starts
+ *    len - the number of blocks in the new free area
+ *  RETURN VALUE
+ *    Returns 0 on success and -1 on error.
+ ******
+ * Pseudocode:
+ *   p: pointer to pointer to the current block list item
+ *   // TODO: if start is at the end of the previous item => extend it
+ *            if end is at the end of the next item => extend it
+ */
 static int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
 {
     struct sfs_block_list **p = free_list_find(sfs, start, len);
     if (*p == NULL) {
         return -1;
     }
+    // TODO: check also previous item, so that no two free items with no delfile
+    //       follow without a gap
     if ((*p)->delfile == NULL && (*p)->start_block == start + len) {
         (*p)->start_block = start;
         (*p)->length += len;
@@ -1624,6 +1641,38 @@ static int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
     return 0;
 }
 
+/****f* sfs/free_list_del
+ *  NAME
+ *    free_list_del -- delete free block from free list
+ *  DESCRIPTION
+ *    Deletes free blocks from the free list, so that they can be used.
+ *    Several free list entries can be deleted and at most one can be resized,
+ *    so that the beginning is moved forward and the length becomes smaller.
+ *    Deleted block entries are freed and if they reference a deleted file, it's
+ *    deleted from the entry list.
+ *  PARAMETERS
+ *    SFS - the SFS structure variable
+ *    p_from - pointer to pointer to the block list entry where the search begins
+ *    length - the number of blocks needed
+ *  RETURN VALUE
+ *    Returns 0 on success and -1 on error.
+ ******
+ * Pseudocode:
+ *   rest: remaining blocks to delete, initialized to length
+ *   p: pointer to pointer to current block, initialized to p_from
+ *
+ *   do while not at end and rest <= length:
+ *     rest := rest - current length
+ *     if delfile in *p then delete it
+ *     free current item
+ *   continue
+ *   // here = at-end or rest < length
+ *   if at-end then error (no more space left) and return
+ *   last element:
+ *     length -= rest
+ *     start block: advance rest times
+ * end pseidocode
+ */
 static int free_list_del(SFS *sfs, struct sfs_block_list **p_from, uint64_t length)
 {
     uint64_t rest = length;
@@ -1641,23 +1690,24 @@ static int free_list_del(SFS *sfs, struct sfs_block_list **p_from, uint64_t leng
         return -1;
     }
     (*p)->length -= rest;
+    (*p)->delfile = NULL;
     (*p)->start_block += rest;
     return 0;
 }
 
-/****f*
+/****f* sfs/sfs_resize
  *  NAME
  *    sfs_resize -- resize a file
  *  DESCRIPTION
  *    Resize a file *path* to size *len*.  Truncate the file if its size
  *    is less than *len*.  Otherwise, fills with null characters.
  *  PARAMETERS
- *    sfs - the SFS variable
+ *    SFS - the SFS structure variable
  *    path - the absolute path of the file
  *    len - the new size for the file
  *  RETURN VALUE
  *    Returns 0 on success and -1 on error.
- ****
+ ******
  * Pseudocode:
  *   l0 - initial file size
  *   l1 - final file size

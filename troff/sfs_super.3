@@ -1,0 +1,21 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH sfs_super 3 "Oct 24, 2018" sfs "sfs Reference"
+
+.SH NAME
+struct \fBsfs_super\fR \-\- structure for the superblock of the file system
+
+.SH DESCRIPTION
+The structure *struct \fBsfs_super\fR* is read from the superblock of the
+file system and contains information about it\.
+
+.SH FIELDS
+time_stamp \- date/time when the volume was changed
+data_size \- size of the Data Area in blocks
+index_size \- size of the Index Area in bytes
+total_blocks \- total size of the filesystem in blocks
+resvd_blocks \- number of bytes used by the Superblock and by
+the Reserved Area, indicates the first block of the
+Data Area
+block_size \- number of bytes in a block

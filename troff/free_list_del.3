@@ -1,0 +1,22 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH free_list_del 3 "Oct 24, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBfree_list_del\fR \-\- delete free block from free list
+
+.SH DESCRIPTION
+Deletes free blocks from the free list, so that they can be used\.
+Several free list entries can be deleted and at most one can be resized,
+so that the beginning is moved forward and the length becomes smaller\.
+Deleted block entries are freed and if they reference a deleted file, it's
+deleted from the entry list\.
+
+.SH PARAMETERS
+SFS \- the SFS structure variable
+p_from \- pointer to pointer to the block list entry where the search begins
+length \- the number of blocks needed
+
+.SH RETURN VALUE
+Returns 0 on success and \-1 on error\.
