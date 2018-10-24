@@ -1593,7 +1593,7 @@ int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t of
             fprintf(stderr, "f!! seek error\n");
             return -1;
         }
-        if (fwrite(buf, sz, 1, sfs->file) != sz) {
+        if (fwrite(buf, sz, 1, sfs->file) != 1) {
             fprintf(stderr, "!! fwrite error\n");
             return -1;
         }

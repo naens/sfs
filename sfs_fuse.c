@@ -247,9 +247,17 @@ static int sfs_fuse_write(path, buf, size, offset, fi)
 {
     printf("### sfs_fuse_write: '%s', size: 0x%lx, offset: 0x%lx\n", path, size, offset);
 
-    int sz = sfs_write(sfs, path, buf, size, offset);
-    if (sz >= 0) {
-        return sz;
+    uint64_t file_size = sfs_get_file_size(sfs, path);
+    uint64_t min_size = offset + size;
+    if (min_size > file_size) {    // if writing beyond the end of file, resize first
+        if (sfs_resize(sfs, path, min_size) != 0) {
+            return -1;
+        }
+    }
+
+    int res = sfs_write(sfs, path, buf, size, offset);
+    if (res >= 0) {
+        return res;
     } else {
         return -ENOENT;
     }
@@ -262,9 +270,9 @@ static int sfs_fuse_truncate(path, length, fi)
 {
     printf("### sfs_fuse_truncate: '%s', offset: 0x%lx\n", path, length);
 
-    int sz = sfs_resize(sfs, path, length);
-    if (sz >= 0) {
-        return sz;
+    int res = sfs_resize(sfs, path, length);
+    if (res == 0) {
+        return length;
     } else {
         return -ENOENT;
     }
