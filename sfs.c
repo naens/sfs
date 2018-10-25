@@ -60,11 +60,35 @@ struct sfs_super {
     uint8_t block_size;
 };
 
-struct sfs_block_list {
+/****s* sfs/block_list
+ * NAME
+ *   struct block_list -- structure to represent a list of block arrays
+ * DESCRIPTION
+ *   The struct block_list structure represents segments of one or more
+ *   consecutive blocks in the data area.  The main use of the
+ *   struct block_list is for the free list.  Other uses occur only during
+ *   its construction.  There are two types of stuct block_list items:
+ *   entries representing deleted files and entries representing free
+ *   usable space.  Two items that represent free space cannot follow each
+ *   other without a gap.  Which means that they can be stretched and merged
+ *   when new free space is added.  The length cannot be zero: such items
+ *   are either not inserted or deleted.
+ *   When space used by a deleted file is used, the rest of the deleted file
+ *   becomes normal free list items (without any file attached to it) and
+ *   the entry from the Index Area entry list is deleted.
+ * FIELDS
+ *   start_block - the index of the first block
+ *   length - the number of block represented by the structure
+ *   delfile - the link to the deleted file entry if it corresponds to a delted
+ *             entry
+ *   next - pointer to the next item of the list
+ */
+
+struct block_list {
     uint64_t start_block;
     uint64_t length;
     struct sfs_entry *delfile;
-    struct sfs_block_list *next;
+    struct block_list *next;
 };
 
 struct sfs {
@@ -74,8 +98,8 @@ struct sfs {
     struct sfs_super *super;
     struct sfs_entry *volume;
     struct sfs_entry *entry_list;
-    struct sfs_block_list *free_list;
-    struct sfs_block_list *free_last;
+    struct block_list *free_list;
+    struct block_list *free_last;
     struct sfs_entry *iter_curr;
 };
 
@@ -383,15 +407,15 @@ static struct sfs_entry *read_entries(SFS *sfs)
     return head;
 }
 
-struct sfs_block_list *block_list_from_entries(struct sfs_entry *entry_list)
+struct block_list *block_list_from_entries(struct sfs_entry *entry_list)
 {
-    struct sfs_block_list *list = NULL;
+    struct block_list *list = NULL;
     struct sfs_entry *entry = entry_list;
     while (entry != NULL) {
         if (entry->type == SFS_ENTRY_FILE
                 || entry->type == SFS_ENTRY_FILE_DEL
                 || entry->type == SFS_ENTRY_UNUSABLE) {
-            struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+            struct block_list *item = malloc(sizeof(struct block_list));
             item->start_block = entry->data.unusable_data->start_block;
             item->next = list;
             list = item;
@@ -418,7 +442,7 @@ struct sfs_block_list *block_list_from_entries(struct sfs_entry *entry_list)
     return list;
 }
 
-struct sfs_block_list **conquer(struct sfs_block_list **p1, struct sfs_block_list **p2, int sz)
+struct block_list **conquer(struct block_list **p1, struct block_list **p2, int sz)
 {
     int i1 = 0;
     int i2 = 0;
@@ -432,7 +456,7 @@ struct sfs_block_list **conquer(struct sfs_block_list **p1, struct sfs_block_lis
         } else {
             i2++;
             if (i1 != sz) {
-                struct sfs_block_list *tmp = *p2;
+                struct block_list *tmp = *p2;
                 (*p2) = tmp->next;
                 tmp->next = (*p1);
                 *p1 = tmp;
@@ -445,7 +469,7 @@ struct sfs_block_list **conquer(struct sfs_block_list **p1, struct sfs_block_lis
     return p2;  // return the tail
 }
 
-static void print_block_list(char *info, struct sfs_block_list *list)
+static void print_block_list(char *info, struct block_list *list)
 {
     printf("%s", info);
     while (list != NULL) {
@@ -456,16 +480,16 @@ static void print_block_list(char *info, struct sfs_block_list *list)
     printf("\n");
 }
 
-static void sort_block_list(struct sfs_block_list **plist)
+static void sort_block_list(struct block_list **plist)
 {
     int sz = 1;
     int n;
     do {
         n = 0;
-        struct sfs_block_list **plist1 = plist;
+        struct block_list **plist1 = plist;
         while (*plist1 != NULL) {
             n = n + 1;
-            struct sfs_block_list **plist2 = plist1;
+            struct block_list **plist2 = plist1;
             int i = 0;
             plist2 = plist1;
             while (i < sz && *plist2 != NULL) {
@@ -479,14 +503,14 @@ static void sort_block_list(struct sfs_block_list **plist)
 }
 
 static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
-    struct sfs_block_list **plist;
+    struct block_list **plist;
     uint64_t first_block;
     uint64_t total_blocks;
-    struct sfs_block_list **free_last;
+    struct block_list **free_last;
 {
     if (*plist == NULL) {
         uint64_t gap = total_blocks - first_block;
-        struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+        struct block_list *item = malloc(sizeof(struct block_list));
         item->start_block = first_block;
         item->length = gap;
         item->delfile = NULL;
@@ -496,10 +520,10 @@ static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
     }
 
     /* if gap before the first block, insert one block structure */
-    struct sfs_block_list **pprev;
-    struct sfs_block_list *curr;
+    struct block_list **pprev;
+    struct block_list *curr;
     if (first_block < (*plist)->start_block) {
-        struct sfs_block_list *b0 = malloc(sizeof(struct sfs_block_list));
+        struct block_list *b0 = malloc(sizeof(struct block_list));
         b0->start_block = first_block;
         b0->length = (*plist)->start_block - first_block;
         b0->next =  (*plist);
@@ -516,7 +540,7 @@ static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
         uint64_t gap = (curr != 0 ? curr->start_block : total_blocks) - prev_end;
         if ((*pprev)->delfile == NULL) {
             if (gap == 0) {
-                struct sfs_block_list *tmp = (*pprev);
+                struct block_list *tmp = (*pprev);
                 *pprev = tmp->next;
                 if ((*pprev)->next == NULL) {
                     *free_last = NULL;
@@ -532,7 +556,7 @@ static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
             }
         } else {
             if (gap > 0) {
-                struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+                struct block_list *item = malloc(sizeof(struct block_list));
                 item->start_block = (*pprev)->start_block + (*pprev)->length;
                 item->length = gap;
                 item->next = curr;
@@ -552,13 +576,13 @@ static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
     }
 }
 
-struct sfs_block_list *make_free_list(sfs, entry_list, free_last)
+struct block_list *make_free_list(sfs, entry_list, free_last)
     struct sfs *sfs;
     struct sfs_entry *entry_list;
-    struct sfs_block_list **free_last;
+    struct block_list **free_last;
 {
     struct sfs_super *super = sfs->super;
-    struct sfs_block_list *block_list = block_list_from_entries(entry_list);
+    struct block_list *block_list = block_list_from_entries(entry_list);
     print_block_list("not sorted: ", block_list);
 
     sort_block_list(&block_list);
@@ -640,10 +664,10 @@ static void free_entry_list(struct sfs_entry *entry_list)
     free_entry(prev);
 }
 
-static void free_free_list(struct sfs_block_list *free_list)
+static void free_free_list(struct block_list *free_list)
 {
-    struct sfs_block_list *prev = free_list;
-    struct sfs_block_list *curr = prev->next;
+    struct block_list *prev = free_list;
+    struct block_list *curr = prev->next;
     while (curr != NULL) {
         free(prev);
         prev = curr;
@@ -958,11 +982,11 @@ static int write_entry(SFS *sfs, struct sfs_entry *entry)
     return 0;
 }
 
-struct sfs_block_list **find_delfile(pfree_list, delfile)
-    struct sfs_block_list **pfree_list;
+struct block_list **find_delfile(pfree_list, delfile)
+    struct block_list **pfree_list;
     struct sfs_entry *delfile;
 {
-    struct sfs_block_list **pfree = pfree_list;
+    struct block_list **pfree = pfree_list;
     while (*pfree != NULL && (*pfree)->delfile != delfile) {
         pfree = &(*pfree)->next;
     }
@@ -970,16 +994,16 @@ struct sfs_block_list **find_delfile(pfree_list, delfile)
 }
 
 static void delete_entries(pfree_list, from, to)
-    struct sfs_block_list **pfree_list;
+    struct block_list **pfree_list;
     struct sfs_entry *from;
     struct sfs_entry *to;
 {
-    struct sfs_block_list **p_free_item = pfree_list;
+    struct block_list **p_free_item = pfree_list;
     struct sfs_entry *p_entry = from;
     while (p_entry != to) {
         if (p_entry->type == SFS_ENTRY_FILE_DEL) {
             p_free_item = find_delfile(p_free_item, p_entry); //if not exist => error
-            struct sfs_block_list *item_to_delete = *p_free_item;
+            struct block_list *item_to_delete = *p_free_item;
             *p_free_item = (*p_free_item)->next;
             free(item_to_delete);
         }
@@ -1293,11 +1317,11 @@ int sfs_rmdir(struct sfs *sfs, const char *path)
 /* Insert a deleted file into the free list */
 static void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
 {
-    struct sfs_block_list **p = &sfs->free_list;
+    struct block_list **p = &sfs->free_list;
     while ((*p) != NULL) {
         if ((*p)->start_block > delfile->data.file_data->start_block) {
             // insert before *p
-            struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
+            struct block_list *item = malloc(sizeof(struct block_list));
             item->start_block = delfile->data.file_data->start_block;
             item->length = 1 + get_num_cont(delfile);
             item->delfile = delfile;
@@ -1325,6 +1349,7 @@ static void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
     }
 }
 
+// TODO: deleted empty files: do not allow in the free list (are never deleted)
 int sfs_delete(struct sfs *sfs, const char *path)
 {
     printf("@@@@\tsfs_delete: name=\"%s\"\n", path);
@@ -1577,13 +1602,13 @@ int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t of
  *   return NULL      // not found
  * end pseudocode
  */
-struct sfs_block_list **free_list_find(sfs, start_block, length)
+struct block_list **free_list_find(sfs, start_block, length)
     SFS *sfs;
     uint64_t start_block;
     uint64_t length;
 {
-    struct sfs_block_list **p = &sfs->free_list;
-    struct sfs_block_list **pfirst = p;
+    struct block_list **p = &sfs->free_list;
+    struct block_list **pfirst = p;
     uint64_t tot = 0;
     uint64_t next = 0;
     while (*p != NULL && tot < length) {
@@ -1607,39 +1632,89 @@ struct sfs_block_list **free_list_find(sfs, start_block, length)
  *  DESCRIPTION
  *    Adds new blocks into the free list.  If the blocks are before and/or
  *    after existing free list entries, the entries are merged.
+ *    Blocks can only be merged with blocks which have delfile NULL.
  *  PARAMETERS
  *    SFS - the SFS structure variable
  *    start - the block where the new free area starts
- *    len - the number of blocks in the new free area
+ *    length - the number of blocks in the new free area
  *  RETURN VALUE
  *    Returns 0 on success and -1 on error.
  ******
  * Pseudocode:
- *   p: pointer to pointer to the current block list item
- *   // TODO: if start is at the end of the previous item => extend it
- *            if end is at the end of the next item => extend it
+ *   item: current block list item
+ *   prev: previous item
+ *
+ *   while item != NULL    // return 0 when found
+ *     if cannot merge with current then
+ *       if start + length = item->start then
+ *         item->start -= length
+ *         return 0
+ *       else if start + length < item->start
+ *         insert new item bewteen prev and item
+ *         return 0
+ *       end if
+ *     else if prev->start + prev->next = start then
+ *       if start + length < item->start
+ *       || (start + length = item->start && item->delfile != NULL)
+ *         prev->length += length
+ *         return 0
+ *       else if start + length = item->start
+ *         prev->length += length + item->length
+ *         prev->next = item->next
+ *         free prev
+ *         return 0
+ *       end if
+ *       prev = item
+ *       item = item->next
+ *   end while
+ *   return -1
+ *
  */
-static int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
+static int free_list_add(SFS *sfs, uint64_t start, uint64_t length)
 {
-    struct sfs_block_list **p = free_list_find(sfs, start, len);
-    if (*p == NULL) {
-        return -1;
+    struct block_list *prev = NULL;
+    struct block_list *item = sfs->free_list;
+
+    while (item != NULL) {
+        if (prev == NULL || prev->start_block + prev->length < start
+                || (prev->start_block + prev->length == start
+                    && prev->delfile != NULL)) {
+            if (start + length == item->start_block) {
+                item->start_block -= length;
+                return 0;
+            } else if (start + length < item->start_block) {
+                struct block_list *new_item = malloc(sizeof(struct block_list));
+                new_item->start_block = start;
+                new_item->length = length;
+                new_item->delfile = NULL;
+                new_item->next = item;
+                prev->next = new_item;
+                if (prev != NULL) {
+                    prev->next = new_item;
+                } else {
+                    sfs->free_list = new_item;
+                }
+              return 0;
+            }
+        } else if (prev->start_block + prev->length == start) {
+            if (start + length < item->start_block
+                    || (start + length == item->start_block
+                        && item->delfile != NULL)) {
+                prev->length += length;
+                return 0;
+            } else if (start + length == item->start_block) {
+                prev->length += length + item->length;
+                prev->next = item->next;
+                free(item);
+                return 0;
+            }
+        }
+        prev = item;
+        item = item->next;
     }
-    // TODO: check also previous item, so that no two free items with no delfile
-    //       follow without a gap
-    if ((*p)->delfile == NULL && (*p)->start_block == start + len) {
-        (*p)->start_block = start;
-        (*p)->length += len;
-    } else {
-        struct sfs_block_list *item = malloc(sizeof(struct sfs_block_list));
-        item->start_block = start;
-        item->length = len;
-        item->delfile = NULL;
-        item->next = (*p);
-        *p = item;
-    }
-    return 0;
+    return -1;
 }
+
 
 /****f* sfs/free_list_del
  *  NAME
@@ -1661,7 +1736,7 @@ static int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
  *   rest: remaining blocks to delete, initialized to length
  *   p: pointer to pointer to current block, initialized to p_from
  *
- *   do while not at end and rest <= length:
+ *   do while (not at end) and (rest <= length):
  *     rest := rest - current length
  *     if delfile in *p then delete it
  *     free current item
@@ -1673,12 +1748,12 @@ static int free_list_add(SFS *sfs, uint64_t start, uint64_t len)
  *     start block: advance rest times
  * end pseidocode
  */
-static int free_list_del(SFS *sfs, struct sfs_block_list **p_from, uint64_t length)
+static int free_list_del(SFS *sfs, struct block_list **p_from, uint64_t length)
 {
     uint64_t rest = length;
-    struct sfs_block_list **p = p_from;
+    struct block_list **p = p_from;
     while (*p != NULL && (*p)->length <= rest) {
-        struct sfs_block_list *tmp = (*p);
+        struct block_list *tmp = (*p);
         rest -= (*p)->length;
         *p = (*p)->next;
         if (tmp->delfile != NULL) {
@@ -1752,11 +1827,11 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
     const uint64_t b1 = (len + bs - 1) / bs;
     const uint64_t s0 = file_entry->data.file_data->start_block;
     if (b1 > b0) {
-        struct sfs_block_list **p_next = free_list_find(sfs, s0 + l0, b1 - b0);
+        struct block_list **p_next = free_list_find(sfs, s0 + l0, b1 - b0);
         if (*p_next != NULL) {
             free_list_del(sfs, p_next, b1 - b0);
         } else {
-            struct sfs_block_list **p_blocks = free_list_find(sfs, 0, b1);
+            struct block_list **p_blocks = free_list_find(sfs, 0, b1);
             if (*p_blocks == NULL) {
                 return -1;
             }
