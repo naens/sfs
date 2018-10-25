@@ -1,7 +1,7 @@
 .\" Source: ./sfs.c
 .\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
 .\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
-.TH free_list_add 3 "Oct 24, 2018" sfs "sfs Reference"
+.TH free_list_add 3 "Oct 25, 2018" sfs "sfs Reference"
 
 .SH NAME
 \fBfree_list_add\fR \-\- add free block to the free list
@@ -9,11 +9,12 @@
 .SH DESCRIPTION
 Adds new blocks into the free list\.  If the blocks are before and/or
 after existing free list entries, the entries are merged\.
+Blocks can only be merged with blocks which have delfile NULL\.
 
 .SH PARAMETERS
 SFS \- the SFS structure variable
 start \- the block where the new free area starts
-len \- the number of blocks in the new free area
+length \- the number of blocks in the new free area
 
 .SH RETURN VALUE
 Returns 0 on success and \-1 on error\.
