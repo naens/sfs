@@ -83,7 +83,6 @@ struct sfs_super {
  *             entry
  *   next - pointer to the next item of the list
  */
-
 struct block_list {
     uint64_t start_block;
     uint64_t length;
@@ -91,10 +90,37 @@ struct block_list {
     struct block_list *next;
 };
 
+/****s* sfs/sfs
+ * NAME
+ *   struct sfs -- the structure representing the current state of the
+ *                 filesystem
+ * DESCRIPTION
+ *   When a filesystem is opened, this structure is created and must be
+ *   accessible (passed as parameter) for every filesystem call.  This
+ *   structure is known to the outside world as SFS and its fields are not
+ *   accessed.  When the filesystem is closed the structure is freed and can
+ *   no longer be used.
+ * FIELDS
+ *   file - the means to access filesystem data (is readable and writable)
+ *   block_size - the size of the blocks to address data (also used for the
+ *                filesystem
+ *   super - pointer to the superblock structure
+ *   volume - pointer to the volume entry
+ *   entry_list - list of the entries in the index area
+ *   free_list - list of the blocks that can be used to store data (each item
+ *               of the list can represent several blocks)
+ *   free_last - the last item of the free_list, is used to represent the free
+ *               area, cannot be empty (in which case the filesystem should not
+ *               be used)
+ *   iter_curr - when reading the contents of a directory, the last found entry
+ *               is stored here (no calls should be made between the first and
+ *               the next calls to search a directory), it is reinitialized on
+ *               each sfs_first call
+ ******
+ */
 struct sfs {
     FILE *file;
     int block_size;
-    int del_file_count;
     struct sfs_super *super;
     struct sfs_entry *volume;
     struct sfs_entry *entry_list;
@@ -387,6 +413,26 @@ struct sfs_entry *sfs_read_volume(SFS *sfs)
     return volume;
 }
 
+void print_entry(struct sfs_entry *entry)
+{
+    printf("\tEntry Type: 0x%02x\n", entry->type);
+    switch (entry->type) {
+    case SFS_ENTRY_DIR:
+    case SFS_ENTRY_DIR_DEL:
+        printf("\tDirectory Name: %s\n", entry->data.dir_data->name);
+        break;
+    case SFS_ENTRY_FILE:
+    case SFS_ENTRY_FILE_DEL:
+        printf("\tFile Name: %s\n", entry->data.file_data->name);
+        break;
+    case SFS_ENTRY_UNUSABLE:
+        break;
+    default:
+        break;
+    }
+
+}
+
 static struct sfs_entry *read_entries(SFS *sfs)
 {
     int offset = sfs->block_size * sfs->super->total_blocks - sfs->super->index_size;
@@ -401,6 +447,7 @@ static struct sfs_entry *read_entries(SFS *sfs)
     while (entry->type != SFS_ENTRY_VOL_ID) {
         struct sfs_entry *prev = entry;
         entry = read_entry(sfs);
+        print_entry(entry);
         prev->next = entry;
     }
     sfs->volume = entry;
@@ -588,11 +635,6 @@ struct block_list *make_free_list(sfs, entry_list, free_last)
     sort_block_list(&block_list);
     print_block_list("sorted:     ", block_list);
 
-/*
-    uint64_t data_size;
-    uint64_t total_blocks;
-    uint32_t rsvd_blocks;
-*/
     uint64_t first_block = super->rsvd_blocks;  // !! includes the superblock
     uint64_t data_blocks = super->total_blocks;
     block_list_to_free_list(&block_list, first_block, data_blocks, free_last);
@@ -1110,7 +1152,9 @@ static int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
         return -1;
     }
 
-    if (sfs->free_last != NULL  && sfs->free_last->length >= entry_size) {
+    printf("\tfree_last length: 0x%06lx (bytes)\n", sfs->free_last->length * sfs->block_size);
+    printf("\tentry size: 0x%06lx\n", entry_size);
+    if (sfs->free_last != NULL  && sfs->free_last->length * sfs->block_size >= entry_size) {
         uint64_t new_isz = sfs->super->index_size + entry_size;
         uint64_t iblk_rest = (sfs->block_size - sfs->super->index_size) % sfs->block_size;
         uint64_t ibt = sfs->super->index_size + iblk_rest; // index with rest in bytes
