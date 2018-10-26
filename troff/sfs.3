@@ -1,10 +1,32 @@
 .\" Source: ./sfs.c
 .\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
 .\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
-.TH sfs 3 "Oct 25, 2018" sfs "sfs Reference"
+.TH sfs 3 "Oct 26, 2018" sfs "sfs Reference"
 
 .SH NAME
-\fBsfs\fR \-\- SFS implementation
+struct \fBsfs\fR \-\- the structure representing the current state of the
+filesystem
 
 .SH DESCRIPTION
-Simple implementation of the SFS file system\.
+When a filesystem is opened, this structure is created and must be
+accessible (passed as parameter) for every filesystem call\.  This
+structure is known to the outside world as SFS and its fields are not
+accessed\.  When the filesystem is closed the structure is freed and can
+no longer be used\.
+
+.SH FIELDS
+file \- the means to access filesystem data (is readable and writable)
+block_size \- the size of the blocks to address data (also used for the
+filesystem
+super \- pointer to the superblock structure
+volume \- pointer to the volume entry
+entry_list \- list of the entries in the index area
+free_list \- list of the blocks that can be used to store data (each item
+of the list can represent several blocks)
+free_last \- the last item of the free_list, is used to represent the free
+area, cannot be empty (in which case the filesystem should not
+be used)
+iter_curr \- when reading the contents of a directory, the last found entry
+is stored here (no calls should be made between the first and
+the next calls to search a directory), it is reinitialized on
+each sfs_first call

@@ -27,12 +27,15 @@
 <ul>
 <li>1. <a href="#robo0">sfs/sfs</a></li>
 <ul>
-<li>1.1. <a href="./sfs_fuse_c.html#robo1">sfs/sfs_fuse</a></li>
-<li>1.2. <a href="#robo2">sfs/free_list_add</a></li>
-<li>1.3. <a href="#robo3">sfs/free_list_del</a></li>
-<li>1.4. <a href="#robo4">sfs/free_list_find</a></li>
-<li>1.5. <a href="#robo5">sfs/sfs_resize</a></li>
-<li>1.6. <a href="#robo6">sfs/sfs_super</a></li>
+<li>1.1. <a href="#robo5">sfs/sfs</a></li>
+<ul>
+<li>1.1.1. <a href="./sfs_fuse_c.html#robo1">sfs/sfs_fuse</a></li>
+<li>1.1.2. <a href="#robo2">sfs/free_list_add</a></li>
+<li>1.1.3. <a href="#robo3">sfs/free_list_del</a></li>
+<li>1.1.4. <a href="#robo4">sfs/free_list_find</a></li>
+<li>1.1.5. <a href="#robo6">sfs/sfs_resize</a></li>
+<li>1.1.6. <a href="#robo7">sfs/sfs_super</a></li>
+</ul>
 </ul>
 </ul>
 <hr />
@@ -51,7 +54,7 @@
 <a name="sfs2ffree5flist5fadd"></a>
 <a name="robo2"></a><h2>sfs/free_list_add [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo0">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo5">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>    <strong>free_list_add</strong> -- add free block to the free list
 </pre>
@@ -73,7 +76,7 @@
 <a name="sfs2ffree5flist5fdel"></a>
 <a name="robo3"></a><h2>sfs/free_list_del [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo0">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo5">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>    <strong>free_list_del</strong> -- delete free block from free list
 </pre>
@@ -97,7 +100,7 @@
 <a name="sfs2ffree5flist5ffind"></a>
 <a name="robo4"></a><h2>sfs/free_list_find [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo0">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo5">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>    <strong>free_list_find</strong> -- find consecutive free block in the free list
 </pre>
@@ -114,10 +117,44 @@
 </pre>
 
 <hr />
-<a name="sfs2fsfs5fresize"></a>
-<a name="robo5"></a><h2>sfs/sfs_resize [ Functions ]</h2>
+<a name="sfs2fsfs"></a>
+<a name="robo5"></a><h2>sfs/sfs [ Structures ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo0">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo0">sfs</a> ] [ <a href="./robo_strutures.html#robo_top_of_doc">Structures</a> ]</p>
+<p class="item_name">NAME</p>
+<pre>   struct <strong>sfs</strong> -- the structure representing the current state of the
+                 filesystem
+</pre>
+<p class="item_name">DESCRIPTION</p>
+<pre>   When a filesystem is opened, this structure is created and must be
+   accessible (passed as parameter) for every filesystem call.  This
+   structure is known to the outside world as SFS and its fields are not
+   accessed.  When the filesystem is closed the structure is freed and can
+   no longer be used.
+</pre>
+<p class="item_name">FIELDS</p>
+<pre>   file - the means to access filesystem data (is readable and writable)
+   block_size - the size of the blocks to address data (also used for the
+                filesystem
+   super - pointer to the superblock structure
+   volume - pointer to the volume entry
+   entry_list - list of the entries in the index area
+   free_list - list of the blocks that can be used to store data (each item
+               of the list can represent several blocks)
+   free_last - the last item of the free_list, is used to represent the free
+               area, cannot be empty (in which case the filesystem should not
+               be used)
+   iter_curr - when reading the contents of a directory, the last found entry
+               is stored here (no calls should be made between the first and
+               the next calls to search a directory), it is reinitialized on
+               each sfs_first call
+</pre>
+
+<hr />
+<a name="sfs2fsfs5fresize"></a>
+<a name="robo6"></a><h2>sfs/sfs_resize [ Functions ]</h2>
+
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo5">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>    <strong>sfs_resize</strong> -- resize a file
 </pre>
@@ -136,9 +173,9 @@
 
 <hr />
 <a name="sfs2fsfs5fsuper"></a>
-<a name="robo6"></a><h2>sfs/sfs_super [ Structures ]</h2>
+<a name="robo7"></a><h2>sfs/sfs_super [ Structures ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo0">sfs</a> ] [ <a href="./robo_strutures.html#robo_top_of_doc">Structures</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo5">sfs</a> ] [ <a href="./robo_strutures.html#robo_top_of_doc">Structures</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   struct <strong>sfs_super</strong> -- structure for the superblock of the file system
 </pre>
@@ -159,7 +196,7 @@
 
 </div> <!-- content -->
 <div id="footer">
-<p>Generated from ./sfs.c with <a href="http://www.xs4all.nl/~rfsber/Robo/robodoc.html">ROBODoc</a> V4.99.43 on Thu Oct 25 2018 21:19:07
+<p>Generated from ./sfs.c with <a href="http://www.xs4all.nl/~rfsber/Robo/robodoc.html">ROBODoc</a> V4.99.43 on Fri Oct 26 2018 14:38:18
 </p>
 </div> <!-- footer -->
 </body>
