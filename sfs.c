@@ -303,7 +303,6 @@ static struct sfs_entry *read_dir_data(uint8_t *buf, struct sfs_entry *entry, FI
 
     const int cont_len = dir_data->num_cont * SFS_ENTRY_SIZE;
     const int name_len = SFS_DIR_NAME_LEN + cont_len;
-    printf("dir: name_len=%d ", name_len);
 
     dir_data->name = malloc(name_len);
     int bufsz = SFS_ENTRY_SIZE * (1 + dir_data->num_cont);
@@ -318,7 +317,6 @@ static struct sfs_entry *read_dir_data(uint8_t *buf, struct sfs_entry *entry, FI
         return NULL;
     }
     entry->data.dir_data = dir_data;
-    printf(" name=%s\n", dir_data->name);
     return entry;   
 }
 
@@ -335,7 +333,6 @@ static struct sfs_entry *read_file_data(uint8_t *buf, struct sfs_entry *entry, F
 
     const int cont_len = file_data->num_cont * SFS_ENTRY_SIZE;
     const int name_len = SFS_FILE_NAME_LEN + cont_len;
-    printf("file: name_len=%d ", name_len);
 
     file_data->name = malloc(name_len);
     int bufsz = SFS_ENTRY_SIZE * (1 + file_data->num_cont);
@@ -350,7 +347,6 @@ static struct sfs_entry *read_file_data(uint8_t *buf, struct sfs_entry *entry, F
         return NULL;
     }
     entry->data.file_data = file_data;
-    printf("name=%s\n", file_data->name);
     return entry;   
 }
 
@@ -366,10 +362,23 @@ static struct sfs_entry *read_unusable_data(uint8_t *buf, struct sfs_entry *entr
     return entry;
 }
 
+static int get_num_cont(struct sfs_entry *entry)
+{
+    switch (entry->type) {
+    case SFS_ENTRY_DIR:
+    case SFS_ENTRY_DIR_DEL:
+        return entry->data.dir_data->num_cont;
+    case SFS_ENTRY_FILE:
+    case SFS_ENTRY_FILE_DEL:
+        return entry->data.file_data->num_cont;
+    default:
+        return 0;
+    }
+}
+
 /* read entry, at current location */
 static struct sfs_entry *read_entry(SFS *sfs)
 {
-
     uint8_t buf[SFS_ENTRY_SIZE];
 
     struct sfs_entry *entry = malloc(sizeof(struct sfs_entry));
@@ -392,7 +401,6 @@ static struct sfs_entry *read_entry(SFS *sfs)
     case SFS_ENTRY_UNUSABLE:
         return read_unusable_data(buf, entry);
     default:
-        printf("entry->type=%x\n", entry->type);
         return entry;
     }
 }
@@ -415,7 +423,11 @@ struct sfs_entry *sfs_read_volume(SFS *sfs)
 
 void print_entry(struct sfs_entry *entry)
 {
-    printf("\tEntry Type: 0x%02x\n", entry->type);
+    printf("ENTRY Type: 0x%02x\n", entry->type);
+    printf("\tOffset: 0x%06lx\n", entry->offset);
+    int num_cont = get_num_cont(entry);
+    printf("\tContinuations: %d\n", num_cont);
+    printf("\tLength: 0x%06x (bytes)\n", (1 + num_cont) * SFS_ENTRY_SIZE);
     switch (entry->type) {
     case SFS_ENTRY_DIR:
     case SFS_ENTRY_DIR_DEL:
@@ -443,6 +455,7 @@ static struct sfs_entry *read_entries(SFS *sfs)
         return NULL;
     }
     struct sfs_entry *entry = read_entry(sfs);
+    print_entry(entry);
     struct sfs_entry *head = entry;
     while (entry->type != SFS_ENTRY_VOL_ID) {
         struct sfs_entry *prev = entry;
@@ -907,20 +920,6 @@ int sfs_read(SFS *sfs, const char *path, char *buf, size_t size, off_t offset)
     }
 }
 
-static int get_num_cont(struct sfs_entry *entry)
-{
-    switch (entry->type) {
-    case SFS_ENTRY_DIR:
-    case SFS_ENTRY_DIR_DEL:
-        return entry->data.dir_data->num_cont;
-    case SFS_ENTRY_FILE:
-    case SFS_ENTRY_FILE_DEL:
-        return entry->data.file_data->num_cont;
-    default:
-        return 0;
-    }
-}
-
 static int get_entry_usable_space(struct sfs_entry *entry)
 {
     switch (entry->type) {
@@ -1103,9 +1102,9 @@ static int insert_entry(struct sfs *sfs, struct sfs_entry *new_entry)
         if (usable_space > 0) {
             if (pfirst_usable == NULL) {
                 pfirst_usable = p_entry;
-                space_found += usable_space;
                 printf("\tfound: %d\n", space_found);
             }
+            space_found += usable_space;
             if (space_found >= space_needed) {
                 int start = (*pfirst_usable)->offset;
                 int end = start + SFS_ENTRY_SIZE * space_needed;
@@ -1252,6 +1251,29 @@ static int check_valid_new(struct sfs *sfs, const char *path)
     return 1;
 }
 
+static int num_cont_from_name(int entry_type, int name_len)
+{
+    int first_len;
+    switch (entry_type) {
+    case SFS_ENTRY_DIR:
+        first_len = SFS_DIR_NAME_LEN;
+        break;
+    case SFS_ENTRY_FILE:
+        first_len = SFS_FILE_NAME_LEN;
+        break;
+    default:
+        break;
+    }
+    int num_cont;
+    if (name_len < first_len) {
+        num_cont = 0;
+    } else {
+        int cont_str_len = name_len - first_len + 1;
+        num_cont = (cont_str_len + SFS_ENTRY_SIZE - 1) / SFS_ENTRY_SIZE;
+    }
+    return num_cont;
+}
+
 int sfs_mkdir(struct sfs *sfs, const char *path)
 {
     int path_len = strlen(path);
@@ -1262,13 +1284,7 @@ int sfs_mkdir(struct sfs *sfs, const char *path)
 
     struct sfs_entry *dir_entry = malloc(sizeof(struct sfs_entry));
     dir_entry->type = SFS_ENTRY_DIR;
-    int num_cont;
-    if (path_len < SFS_DIR_NAME_LEN) {
-        num_cont = 0;
-    } else {
-        int cont_str_len = path_len - SFS_DIR_NAME_LEN + 1;
-        num_cont = (cont_str_len + SFS_ENTRY_SIZE - 1) / SFS_ENTRY_SIZE;
-    }
+    int num_cont = num_cont_from_name(SFS_ENTRY_DIR, path_len);
     dir_entry->data.dir_data = malloc(sizeof(struct dir_data));
     dir_entry->data.dir_data->num_cont = num_cont;
     dir_entry->data.dir_data->time_stamp = make_time_stamp();
@@ -1292,14 +1308,7 @@ int sfs_create(struct sfs *sfs, const char *path)
 
     struct sfs_entry *file_entry = malloc(sizeof(struct sfs_entry));
     file_entry->type = SFS_ENTRY_FILE;
-    int num_cont;
-    if (path_len < SFS_FILE_NAME_LEN) {
-        num_cont = 0;
-    } else {
-        int cont_str_len = path_len - SFS_FILE_NAME_LEN + 1;
-        num_cont = (cont_str_len + SFS_ENTRY_SIZE - 1) / SFS_ENTRY_SIZE;
-    }
-
+    int num_cont = num_cont_from_name(SFS_ENTRY_FILE, path_len);
     file_entry->data.file_data = malloc(sizeof(struct file_data));
     file_entry->data.file_data->num_cont = num_cont;
     file_entry->data.file_data->time_stamp = make_time_stamp();
@@ -1377,6 +1386,31 @@ static void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
     }
 }
 
+/****f* sfs/delete_entry
+ * NAME
+ *   delete_entry -- delete entry from the entry list and free it
+ * DESCRIPTION
+ *   The function delete_entry deletes the entry given as parameter and frees
+ *   the entry.  It is assmued that the entry is in the entry list and can be
+ *   freed (for example if it's a file entry, its name field contains a valid
+ *   null-terminated string.
+ * PARAMETERS
+ *   SFS - the SFS structure variable
+ *   entry - the entry to be deleted
+ * RETURN VALUE
+ *   This is a void function and does not return anything.
+ ******
+ * Pseudocode:
+ *   entry_length - the number of SFS_ENTRY_SIZE-byte segments to be deleted
+ *
+ *   for each entry do:
+ *     if entry found (pointers are equal) then
+ *       insert unused before entry->next entry_length times
+ *       point the pointer to the entry to its next
+ *       free entry
+ *     end if
+ * end pseudocode
+ */
 // assume that the entry can be deleted
 static void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
 {
@@ -1393,7 +1427,7 @@ static void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
     }
 }
 
-// TODO: deleted empty files: do not allow in the free list (are never deleted)
+// deleted empty files: do not allow in the free list (are never deleted)
 int sfs_delete(struct sfs *sfs, const char *path)
 {
     printf("@@@@\tsfs_delete: name=\"%s\"\n", path);
@@ -1469,18 +1503,48 @@ int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec)
     return write_entry(sfs, entry);
 }
 
-static void rename_entry(struct sfs_entry *entry, char *name)
+/****f* sfs/rename_entry
+ * NAME
+ *   rename_entry -- rename the entry by deleting the old and inserting the new
+ * DESCRIPTION
+ *   Creates a new entry with all data the same as the entry given, but with a
+ *   new name.  The old entry is deleted from the entry list and the new is
+ *   inserted.  The changes made to the entry list are also written to the
+ *   Index Area.
+ * RETURN VALUE
+ *   On success returns 0, on error returns -1.
+ *****
+ */
+static int rename_entry(SFS *sfs, struct sfs_entry *entry, const char *name)
 {
+    struct sfs_entry *new_entry = malloc(sizeof(struct sfs_entry));
+    int num_cont = num_cont_from_name(entry->type, strlen(name));
+    new_entry->type = entry->type;
+    char *buf = calloc(SFS_ENTRY_SIZE * (1 + num_cont), 1);
+    strcpy(buf, name);
     switch (entry->type) {
     case SFS_ENTRY_DIR:
-        free(entry->data.dir_data->name);
-        entry->data.dir_data->name = name;
+        new_entry->data.dir_data = malloc(sizeof(struct dir_data));
+        new_entry->data.dir_data->num_cont = num_cont;
+        new_entry->data.dir_data->time_stamp = entry->data.dir_data->time_stamp;
+        free(new_entry->data.dir_data->name);
+        new_entry->data.dir_data->name = buf;
         break;
     case SFS_ENTRY_FILE:
-        free(entry->data.file_data->name);
-        entry->data.file_data->name = name;
+        new_entry->data.file_data = malloc(sizeof(struct file_data));
+        new_entry->data.file_data->num_cont = num_cont;
+        new_entry->data.file_data->time_stamp = entry->data.file_data->time_stamp;
+        new_entry->data.file_data->start_block = entry->data.file_data->start_block;
+        new_entry->data.file_data->end_block = entry->data.file_data->end_block;
+        new_entry->data.file_data->file_len = entry->data.file_data->file_len;
+        free(new_entry->data.file_data->name);
+        new_entry->data.file_data->name = buf;
+        break;
+    default:
         break;
     }
+    delete_entry(sfs, entry);
+    return insert_entry(sfs, new_entry);
 }
 
 /* Assume: there is no entry with name dest_path.
@@ -1511,13 +1575,13 @@ static int move_dir(sfs, source_path, dest_path)
             int name_len = strlen(name);
             if (name_len >= src_len && (name_len == src_len || name[src_len] == '/')
                     && strncmp(source_path, name, src_len) == 0) {
-                char *new_name = malloc(dest_len + name_len - src_len + 1);
+                char new_name[dest_len + name_len - src_len + 1];
                 strncpy(new_name, dest_path, dest_len);
                 strncpy(&new_name[dest_len], &name[src_len], name_len - src_len + 1);
-                rename_entry(entry, new_name);
-                if (write_entry(sfs, entry) == -1) {
+                if (rename_entry(sfs, entry, new_name) == -1) {
                     return -1;
                 }
+                // TODO: !!! move several entries => !!!
             }
         }
         entry = entry->next;
@@ -1570,8 +1634,7 @@ int sfs_rename(sfs, source_path, dest_path, replace)
             return -1;
         }
     } else if (entry->type == SFS_ENTRY_FILE) {
-        rename_entry(entry, strdup(dest_path));
-        if (write_entry(sfs, entry) != 0) {
+        if (rename_entry(sfs, entry, dest_path) == -1) {
             return -1;
         }
     }
@@ -1815,17 +1878,17 @@ static int free_list_del(SFS *sfs, struct block_list **p_from, uint64_t length)
 }
 
 /****f* sfs/sfs_resize
- *  NAME
- *    sfs_resize -- resize a file
- *  DESCRIPTION
- *    Resize a file *path* to size *len*.  Truncate the file if its size
- *    is less than *len*.  Otherwise, fills with null characters.
- *  PARAMETERS
- *    SFS - the SFS structure variable
- *    path - the absolute path of the file
- *    len - the new size for the file
- *  RETURN VALUE
- *    Returns 0 on success and -1 on error.
+ * NAME
+ *   sfs_resize -- resize a file
+ * DESCRIPTION
+ *   Resize a file *path* to size *len*.  Truncate the file if its size
+ *   is less than *len*.  Otherwise, fills with null characters.
+ * PARAMETERS
+ *   SFS - the SFS structure variable
+ *   path - the absolute path of the file
+ *   len - the new size for the file
+ * RETURN VALUE
+ *   Returns 0 on success and -1 on error.
  ******
  * Pseudocode:
  *   l0 - initial file size
@@ -1900,9 +1963,10 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
         }
     }
     if (l1 > l0) {
-        char c = '\0';
-        fseek(sfs->file, (s0 + len) * bs, SEEK_SET);
-        fwrite(&c, 1, l1 - l0, sfs->file);
+        char c[l1-l0];
+        memset(c, 0, l1-l0);
+        fseek(sfs->file, s0 * bs + l0, SEEK_SET);
+        fwrite(&c, l1 - l0, 1, sfs->file);
     }
     file_entry->data.file_data->file_len = l1;
     if (write_entry(sfs, file_entry) != 0) {
