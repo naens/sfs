@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-g -O0 -Wfatal-errors -Wextra -Wall -Wno-unused-parameter $(shell pkg-config fuse3 --cflags)
+CFLAGS=-g -O0 -Wextra -Wall -Wfatal-errors -Wno-unused-parameter $(shell pkg-config fuse3 --cflags)
 LDFLAGS=-lm $(shell pkg-config fuse3 --libs)
 
 all: sfs_fuse sfs_tool fntest
@@ -31,4 +31,4 @@ troff: sfs.c sfs_tool.c
 
 .PHONY: clean
 clean:
-	rm -f *.o view sfs_tool sfs_fuse
+	rm -f *.o view sfs_tool sfs_fuse fntest
