@@ -1343,6 +1343,19 @@ static int is_dir_empty(struct sfs *sfs, const char *path) {
     return 1;
 }
 
+/****f* sfs/sfs_rmdir
+ * NAME
+ *   sfs_rmdir -- delete an empty directory
+ * DESCRIPTION
+ *   Delete an empty directory located at the specified path.  If it is not
+ *   a directory or if it's not empty, nothing happens and -1 is returned.
+ * PARAMETERS
+ *   SFS - the SFS structure variable
+ *   path - absolute path of the directory to delete
+ * RETURN VALUE
+ *   On success returns 0.  On error returns -1.
+ ******
+ */
 int sfs_rmdir(struct sfs *sfs, const char *path)
 {
     printf("@@@@\tsfs_rmdir: name=\"%s\"\n", path);
@@ -1412,7 +1425,6 @@ static void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
  *     end if
  * end pseudocode
  */
-// assume that the entry can be deleted
 static void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
 {
     struct sfs_entry **p_entry = &sfs->entry_list;
@@ -1428,6 +1440,20 @@ static void delete_entry(struct sfs *sfs, struct sfs_entry *entry)
     }
 }
 
+
+/****f* sfs/sfs_delete
+ * NAME
+ *   sfs_delete -- delete a file form the file system
+ * DESCRIPTION
+ *   Delete a file from the file system.  Can be used only for files, for
+ *   directories sfs_rmdir can be used.
+ * PARAMETERS
+ *   SFS - the SFS structure variable
+ *   path - the absolute path of the file that should be deleted
+ * RETURN VALUE
+ *   Returns 0 on success and -1 on error.
+ ******
+ */
 // deleted empty files: do not allow in the free list (are never deleted)
 int sfs_delete(struct sfs *sfs, const char *path)
 {
@@ -1514,7 +1540,7 @@ int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec)
  *   Index Area.
  * RETURN VALUE
  *   On success returns 0, on error returns -1.
- *****
+ ******
  */
 static int rename_entry(SFS *sfs, struct sfs_entry *entry, const char *name)
 {
@@ -1590,6 +1616,23 @@ static int move_dir(sfs, source_path, dest_path)
     return 0;
 }
 
+
+/****f* sfs/sfs_rename
+ * NAME
+ *   sfs_rename -- rename the file or directory (or move)
+ * DESCRIPTION
+ *   Move a file or directory from one path to another.  It can replace
+ *   existing files if the replace parameter is *true*.
+ * PARAMETER
+ *   SFS - the SFS structure variable
+ *   source_path - the name of the file or directory to rename or move
+ *   dest_path - the new name for the file or directory
+ *   replace - boolean parameter indicating whether the file or directory
+ *             should be replaced
+ * RETURN VALUE
+ *   Returns 0 on success and -1 on error.
+ ******
+ */
 int sfs_rename(sfs, source_path, dest_path, replace)
     SFS *sfs;
     const char *source_path;
@@ -1642,6 +1685,26 @@ int sfs_rename(sfs, source_path, dest_path, replace)
     return 0;
 }
 
+
+/****f* sfs/sfs_write
+ * NAME
+ *   sfs_write -- write to file from buffer at an offset
+ * DESCRIPTION
+ *   Write a specified amount of bytes from buffer to file at a specified offset.
+ *   If there is not enough space, the file size is not increased (sfs_resize
+ *   must be called in such case).  The offset must not be further than the end
+ *   of the file.  If the sum of size and the offset is greater than the tota
+ *   size of the file, bytes are written only until the end of the file.
+ * PARAMETERS
+ *   SFS - the SFS structure variable
+ *   path - path of the file in the file system
+ *   buf - buffer containing bytes to write
+ *   size - number of bytes to read from buffer and to write to file
+ *   offset - offset in the file where the bytes should be written
+ * RETURN VALUE
+ *   On error -1 is returned, on success returns the number of bytes written.
+ *****
+ */
 int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t offset)
 {
     printf("@@@@\tsfs_write: path=\"%s\", size:0x%lx, offset:0x%lx\n", path, size, offset);
@@ -1877,6 +1940,7 @@ static int free_list_del(SFS *sfs, struct block_list **p_from, uint64_t length)
     (*p)->start_block += rest;
     return 0;
 }
+
 
 /****f* sfs/sfs_resize
  * NAME
