@@ -1309,6 +1309,7 @@ int sfs_create(struct sfs *sfs, const char *path)
     struct sfs_entry *file_entry = malloc(sizeof(struct sfs_entry));
     file_entry->type = SFS_ENTRY_FILE;
     int num_cont = num_cont_from_name(SFS_ENTRY_FILE, path_len);
+    printf("\tpath_len=%d=>num_cont=%d\n", path_len, num_cont);
     file_entry->data.file_data = malloc(sizeof(struct file_data));
     file_entry->data.file_data->num_cont = num_cont;
     file_entry->data.file_data->time_stamp = make_time_stamp();
@@ -1518,8 +1519,10 @@ int sfs_set_time(SFS *sfs, const char *path, struct timespec *timespec)
 static int rename_entry(SFS *sfs, struct sfs_entry *entry, const char *name)
 {
     struct sfs_entry *new_entry = malloc(sizeof(struct sfs_entry));
-    int num_cont = num_cont_from_name(entry->type, strlen(name));
+    int path_len = strlen(name);
+    int num_cont = num_cont_from_name(entry->type, path_len);
     new_entry->type = entry->type;
+    printf("\tpath_len=%d=>num_cont=%d\n", path_len, num_cont);
     char *buf = calloc(SFS_ENTRY_SIZE * (1 + num_cont), 1);
     strcpy(buf, name);
     switch (entry->type) {
@@ -1527,7 +1530,6 @@ static int rename_entry(SFS *sfs, struct sfs_entry *entry, const char *name)
         new_entry->data.dir_data = malloc(sizeof(struct dir_data));
         new_entry->data.dir_data->num_cont = num_cont;
         new_entry->data.dir_data->time_stamp = entry->data.dir_data->time_stamp;
-        free(new_entry->data.dir_data->name);
         new_entry->data.dir_data->name = buf;
         break;
     case SFS_ENTRY_FILE:
@@ -1537,14 +1539,13 @@ static int rename_entry(SFS *sfs, struct sfs_entry *entry, const char *name)
         new_entry->data.file_data->start_block = entry->data.file_data->start_block;
         new_entry->data.file_data->end_block = entry->data.file_data->end_block;
         new_entry->data.file_data->file_len = entry->data.file_data->file_len;
-        free(new_entry->data.file_data->name);
         new_entry->data.file_data->name = buf;
         break;
     default:
         break;
     }
     delete_entry(sfs, entry);
-    return insert_entry(sfs, new_entry);
+    return put_new_entry(sfs, new_entry);
 }
 
 /* Assume: there is no entry with name dest_path.
