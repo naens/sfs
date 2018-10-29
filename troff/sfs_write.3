@@ -1,0 +1,24 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH sfs_write 3 "Oct 29, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBsfs_write\fR \-\- write to file from buffer at an offset
+
+.SH DESCRIPTION
+Write a specified amount of bytes from buffer to file at a specified offset\.
+If there is not enough space, the file size is not increased (sfs_resize
+must be called in such case)\.  The offset must not be further than the end
+of the file\.  If the sum of size and the offset is greater than the tota
+size of the file, bytes are written only until the end of the file\.
+
+.SH PARAMETERS
+SFS \- the SFS structure variable
+path \- path of the file in the file system
+buf \- buffer containing bytes to write
+size \- number of bytes to read from buffer and to write to file
+offset \- offset in the file where the bytes should be written
+
+.SH RETURN VALUE
+On error \-1 is returned, on success returns the number of bytes written\.

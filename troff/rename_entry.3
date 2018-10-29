@@ -1,0 +1,16 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH rename_entry 3 "Oct 29, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBrename_entry\fR \-\- rename the entry by deleting the old and inserting the new
+
+.SH DESCRIPTION
+Creates a new entry with all data the same as the entry given, but with a
+new name\.  The old entry is deleted from the entry list and the new is
+inserted\.  The changes made to the entry list are also written to the
+Index Area\.
+
+.SH RETURN VALUE
+On success returns 0, on error returns \-1\.

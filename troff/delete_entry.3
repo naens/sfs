@@ -1,0 +1,20 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH delete_entry 3 "Oct 29, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBdelete_entry\fR \-\- delete entry from the entry list and free it
+
+.SH DESCRIPTION
+The function \fBdelete_entry\fR deletes the entry given as parameter and frees
+the entry\.  It is assmued that the entry is in the entry list and can be
+freed (for example if it's a file entry, its name field contains a valid
+null\-terminated string\.
+
+.SH PARAMETERS
+SFS \- the SFS structure variable
+entry \- the entry to be deleted
+
+.SH RETURN VALUE
+This is a void function and does not return anything\.

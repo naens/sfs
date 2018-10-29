@@ -1,0 +1,18 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH sfs_rmdir 3 "Oct 29, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBsfs_rmdir\fR \-\- delete an empty directory
+
+.SH DESCRIPTION
+Delete an empty directory located at the specified path\.  If it is not
+a directory or if it's not empty, nothing happens and \-1 is returned\.
+
+.SH PARAMETERS
+SFS \- the SFS structure variable
+path \- absolute path of the directory to delete
+
+.SH RETURN VALUE
+On success returns 0\.  On error returns \-1\.

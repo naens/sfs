@@ -1,0 +1,20 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Mar  7 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH sfs_rename 3 "Oct 29, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBsfs_rename\fR \-\- rename the file or directory (or move)
+
+.SH DESCRIPTION
+Move a file or directory from one path to another\.  It can replace
+existing files if the replace parameter is *true*\.
+PARAMETER
+SFS \- the SFS structure variable
+source_path \- the name of the file or directory to rename or move
+dest_path \- the new name for the file or directory
+replace \- boolean parameter indicating whether the file or directory
+should be replaced
+
+.SH RETURN VALUE
+Returns 0 on success and \-1 on error\.
