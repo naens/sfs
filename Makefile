@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-g -O0 -Wextra -Wall -Wfatal-errors -Wno-unused-parameter $(shell pkg-config fuse3 --cflags)
 LDFLAGS=-lm $(shell pkg-config fuse3 --libs)
 
-all: sfs_fuse sfs_tool fntest
+all: sfs_fuse sfs_tool filename_test freelist_test
 
 sfs_fuse: sfs_fuse.c sfs.c
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
@@ -10,8 +10,10 @@ sfs_fuse: sfs_fuse.c sfs.c
 sfs_tool: sfs_tool.c sfs.c
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
-#-Xlinker -Map=program.map -Xlinker --cref 
-fntest: fntest.c sfs.c
+filename_test: filename_test.c sfs.c
+	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
+
+freelist_test: freelist_test.c sfs.c
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
 .PHONY: fuse
@@ -31,4 +33,4 @@ troff: sfs.c sfs_tool.c
 
 .PHONY: clean
 clean:
-	rm -f *.o view sfs_tool sfs_fuse fntest
+	rm -f *.o view sfs_tool sfs_fuse filename_test freelist_test
