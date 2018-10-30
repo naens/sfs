@@ -554,13 +554,17 @@ struct block_list **conquer(struct block_list **p1, struct block_list **p2, int 
 }
 
 
-static void print_block_list(char *info, struct block_list *list)
+static void print_block_list(struct sfs *sfs, char *info, struct block_list *list)
 {
-    printf("%s", info);
+    printf("%s\n", info);
     while (list != NULL) {
-        char *d = list->delfile == NULL ? "" : "d";
-        printf("(%s%03lx,%03lx) ", d, list->start_block, list->length);
+        printf("\tstart:  0x%06lx", list->start_block * sfs->block_size);
+        printf("\tlength: 0x%06lx\t", list->length * sfs->block_size);
+        if (list->delfile != NULL) {
+            printf("\tdelfile: %s", list->delfile->data.file_data->name);
+        }
         list = list->next;
+        printf("\n");
     }
     printf("\n");
 }
@@ -671,15 +675,15 @@ struct block_list *make_free_list(sfs, entry_list, free_last)
 {
     struct sfs_super *super = sfs->super;
     struct block_list *block_list = block_list_from_entries(entry_list);
-    print_block_list("not sorted: ", block_list);
+    print_block_list(sfs, "not sorted:", block_list);
 
     sort_block_list(&block_list);
-    print_block_list("sorted:     ", block_list);
+    print_block_list(sfs, "sorted:", block_list);
 
     uint64_t first_block = super->rsvd_blocks;  // !! includes the superblock
     uint64_t data_blocks = super->total_blocks;
     block_list_to_free_list(&block_list, first_block, data_blocks, free_last);
-    print_block_list("free:     ", block_list);
+    print_block_list(sfs, "free:", block_list);
 
     return block_list;
 }
@@ -1917,6 +1921,7 @@ static int free_list_add(SFS *sfs, uint64_t start, uint64_t length)
     struct block_list *prev = NULL;
     struct block_list *item = sfs->free_list;
 
+    printf("[[free_list_add: start=0x%06lx length=0x%06lx]]\n", start, length);
     while (item != NULL) {
         if (prev == NULL || prev->start_block + prev->length < start
                 || (prev->start_block + prev->length == start
@@ -2068,10 +2073,14 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
     const uint64_t l1 = (uint64_t)len;
     const uint64_t b0 = (l0 + bs - 1) / bs;
     const uint64_t b1 = (len + bs - 1) / bs;
-    const uint64_t s0 = file_entry->data.file_data->start_block;
+    uint64_t s0 = file_entry->data.file_data->start_block;
     if (b1 > b0) {
         struct block_list **p_next = free_list_find(sfs, s0 + l0, b1 - b0);
         if (*p_next != NULL) {
+            if (l0 == 0) {
+                s0 = (*p_next)->start_block;
+                file_entry->data.file_data->start_block = s0;
+            }
             free_list_del(sfs, p_next, b1 - b0);
         } else {
             struct block_list **p_blocks = free_list_find(sfs, 0, b1);
@@ -2105,6 +2114,7 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
         fwrite(&c, l1 - l0, 1, sfs->file);
     }
     file_entry->data.file_data->file_len = l1;
+    file_entry->data.file_data->end_block = s0 + (l1 + sfs->block_size - 1) / sfs->block_size - 1;
     if (write_entry(sfs, file_entry) != 0) {
         return -1;
     }
