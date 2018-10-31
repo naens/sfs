@@ -38,7 +38,7 @@ void test_resize(sfs, test_number, name, num_blocks)
     int num_blocks;
 {
     printf("\n>>>%d. RESIZE %s<<<\n", test_number, name);
-    int sz = make_size(2);
+    int sz = make_size(num_blocks);
     if (sfs_resize(sfs, (const char*) name, sz) != 0) {
         ERROR
     }
@@ -64,12 +64,11 @@ int main(int argc, char **argv)
 
     test_create(sfs, 1, "File1");
     test_resize(sfs, 2, "File1", 2);
-    EXIT
-
     test_create(sfs, 3, "File2");
     test_resize(sfs, 4, "File2", 1);
     test_delete(sfs, 5, "File1");
     test_create(sfs, 6, "File3");
+    EXIT
     test_resize(sfs, 7, "File3", 3);
     test_resize(sfs, 8, "File2", 2);
     test_resize(sfs, 9, "File3", 5);

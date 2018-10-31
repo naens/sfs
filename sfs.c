@@ -442,7 +442,7 @@ struct sfs_entry *sfs_read_volume(SFS *sfs)
 }
 
 
-void print_entry(struct sfs_entry *entry)
+void print_entry(struct sfs *sfs, struct sfs_entry *entry)
 {
     printf("ENTRY Type: 0x%02x\n", entry->type);
     printf("\tOffset: 0x%06lx\n", entry->offset);
@@ -457,6 +457,8 @@ void print_entry(struct sfs_entry *entry)
     case SFS_ENTRY_FILE:
     case SFS_ENTRY_FILE_DEL:
         printf("\tFile Name: %s\n", entry->data.file_data->name);
+        printf("\tFile Start: 0x%06lx\n", entry->data.file_data->start_block * sfs->block_size);
+        printf("\tFile Length: 0x%06lx\n", entry->data.file_data->file_len);
         break;
     case SFS_ENTRY_UNUSABLE:
         break;
@@ -477,12 +479,12 @@ static struct sfs_entry *read_entries(SFS *sfs)
         return NULL;
     }
     struct sfs_entry *entry = read_entry(sfs);
-    print_entry(entry);
+    print_entry(sfs, entry);
     struct sfs_entry *head = entry;
     while (entry->type != SFS_ENTRY_VOL_ID) {
         struct sfs_entry *prev = entry;
         entry = read_entry(sfs);
-        print_entry(entry);
+        print_entry(sfs, entry);
         prev->next = entry;
     }
     sfs->volume = entry;
@@ -495,7 +497,7 @@ struct block_list *block_list_from_entries(struct sfs_entry *entry_list)
     struct block_list *list = NULL;
     struct sfs_entry *entry = entry_list;
     while (entry != NULL) {
-        if (entry->type == SFS_ENTRY_FILE
+        if ((entry->type == SFS_ENTRY_FILE && entry->data.file_data->file_len != 0)
                 || entry->type == SFS_ENTRY_FILE_DEL
                 || entry->type == SFS_ENTRY_UNUSABLE) {
             struct block_list *item = malloc(sizeof(struct block_list));
@@ -681,7 +683,8 @@ struct block_list *make_free_list(sfs, entry_list, free_last)
     print_block_list(sfs, "sorted:", block_list);
 
     uint64_t first_block = super->rsvd_blocks;  // !! includes the superblock
-    uint64_t data_blocks = super->total_blocks;
+    uint64_t iblocks = (sfs->super->index_size + sfs->block_size - 1) / sfs->block_size;
+    uint64_t data_blocks = super->total_blocks - iblocks; // without index blocks !!
     block_list_to_free_list(&block_list, first_block, data_blocks, free_last);
     print_block_list(sfs, "free:", block_list);
 
@@ -1095,16 +1098,16 @@ static void delete_entries(pfree_list, from, to)
     struct sfs_entry *to;
 {
     struct block_list **p_free_item = pfree_list;
-    struct sfs_entry *p_entry = from;
-    while (p_entry != to) {
-        if (p_entry->type == SFS_ENTRY_FILE_DEL) {
-            p_free_item = find_delfile(p_free_item, p_entry); //if not exist => error
+    struct sfs_entry *entry = from;
+    while (entry != to) {
+        if (entry->type == SFS_ENTRY_FILE_DEL) {
+            p_free_item = find_delfile(p_free_item, entry); //if not exist => error
             struct block_list *item_to_delete = *p_free_item;
             *p_free_item = (*p_free_item)->next;
             free(item_to_delete);
         }
-        struct sfs_entry *tmp = p_entry;
-        p_entry = p_entry->next;
+        struct sfs_entry *tmp = entry;
+        entry = entry->next;
         free_entry(tmp);
     }
 }
@@ -1213,16 +1216,19 @@ static int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
     printf("\tentry size: 0x%06lx\n", entry_size);
     if (sfs->free_last != NULL  && sfs->free_last->length * sfs->block_size >= entry_size) {
         uint64_t new_isz = sfs->super->index_size + entry_size;
-        uint64_t iblk_rest = (sfs->block_size - sfs->super->index_size) % sfs->block_size;
-        uint64_t ibt = sfs->super->index_size + iblk_rest; // index with rest in bytes
+        uint64_t iblocks = (sfs->super->index_size + sfs->block_size - 1) / sfs->block_size;
+        uint64_t ibt = iblocks * sfs->block_size;                // index with rest in bytes
         uint64_t fbt = sfs->free_last->length * sfs->block_size; // free blocks in bytes
+        uint64_t index_start = sfs->super->total_blocks * sfs->block_size - sfs->super->index_size;
         printf("\tblock size: 0x%06x\n", sfs->block_size);
         printf("\toriginal index size: 0x%06lx\n", sfs->super->index_size);
+        printf("\toriginal index start: 0x%06lx\n", index_start);
         printf("\toriginal free blocks: 0x%06lx\n", sfs->free_last->length);
-        printf("\tindex blocks (bytes): 0x%06lx\n", ibt);
-        printf("\tfree blocks (bytes): 0x%06lx\n", fbt);
-        printf("\tentry size: 0x%06lx\n", entry_size);
+        printf("\toriginal index blocks (bytes): 0x%06lx\n", ibt);
+        printf("\toriginal free blocks (bytes): 0x%06lx\n", fbt);
+        printf("\tnew entry size: 0x%06lx\n", entry_size);
         printf("\tnew index size: 0x%06lx\n", new_isz);
+        printf("\tnew index start: 0x%06lx\n", index_start - entry_size);
         if (new_isz > ibt) {
             // update free list
             if (new_isz - ibt > fbt) {
@@ -1231,6 +1237,7 @@ static int prepend_entry(struct sfs *sfs, struct sfs_entry *entry)
             }
             sfs->free_last->length -= (new_isz - ibt + sfs->block_size - 1) / sfs->block_size;
             printf("\tupdate free_last: 0x%06lx\n", sfs->free_last->length);
+            printf("\tnew free blocks (bytes): 0x%06lx\n", sfs->free_last->length * sfs->block_size);
         }
         sfs->super->index_size = new_isz;
         printf("\tupdate index size: 0x%06lx\n", new_isz);
@@ -1456,7 +1463,7 @@ static void free_list_insert(struct sfs *sfs, struct sfs_entry *delfile)
             // insert before *p
             struct block_list *item = malloc(sizeof(struct block_list));
             item->start_block = delfile->data.file_data->start_block;
-            item->length = 1 + get_num_cont(delfile);
+            item->length = (delfile->data.file_data->file_len + sfs->block_size - 1) / sfs->block_size;
             item->delfile = delfile;
             item->next = (*p);
             *p = item;
@@ -1822,7 +1829,7 @@ int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t of
  *    Finds consecutive block entries starting from *start_block*.
  *  PARAMETERS
  *    SFS - the SFS structure variable
- *    sfart_block - the minimum block number for the consecutive blocks
+ *    start_block - the minimum block number for the consecutive blocks
  *    length - minimum length of the consecutive blocks
  *  RETURN VALUE
  *    Returns a pointer to pointer to the found block or NULL if could not find.
@@ -1839,8 +1846,10 @@ int sfs_write(SFS *sfs, const char *path, const char *buf, size_t size, off_t of
  *        *pfirst = p	// set the first block found to current
  *        tot = 0       // what was found was not enough, starting again
  *      end if
- *      tot += (*p)->length
- *      next = (*p)->start_block + (*p)->length
+ *      if start block not yet reached then
+ *        tot += (*p)->length
+ *        next = (*p)->start_block + (*p)->length
+ *       end if
  *      set p to next
  *   continue
  *   if tot >= length then return pfirst        // found => return
@@ -1857,12 +1866,14 @@ struct block_list **free_list_find(sfs, start_block, length)
     uint64_t tot = 0;
     uint64_t next = 0;
     while (*p != NULL && tot < length) {
-        if(next != (*p)->start_block) {
+        if (next != (*p)->start_block) {
             pfirst = p;
             tot = 0;
         }
-        tot += (*p)->length;
-        next = (*p)->start_block + (*p)->length;
+        if (start_block <= (*p)->start_block) {
+            tot += (*p)->length;
+            next = (*p)->start_block + (*p)->length;
+        }
         p = &(*p)->next;
     }
     if (tot >= length) {
@@ -1920,6 +1931,10 @@ static int free_list_add(SFS *sfs, uint64_t start, uint64_t length)
 {
     struct block_list *prev = NULL;
     struct block_list *item = sfs->free_list;
+
+    if (length == 0) {
+        return 0;
+    }
 
     printf("[[free_list_add: start=0x%06lx length=0x%06lx]]\n", start, length);
     while (item != NULL) {
@@ -2004,7 +2019,7 @@ static int free_list_del(SFS *sfs, struct block_list **p_from, uint64_t length)
         rest -= (*p)->length;
         *p = (*p)->next;
         if (tmp->delfile != NULL) {
-            delete_entries(&sfs->free_list, tmp->delfile, tmp->delfile->next);
+            delete_entries(&sfs->free_list, &tmp->delfile, tmp->delfile->next);
         }
         free(tmp);
     }
@@ -2075,8 +2090,8 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
     const uint64_t b1 = (len + bs - 1) / bs;
     uint64_t s0 = file_entry->data.file_data->start_block;
     if (b1 > b0) {
-        struct block_list **p_next = free_list_find(sfs, s0 + l0, b1 - b0);
-        if (*p_next != NULL) {
+        struct block_list **p_next = free_list_find(sfs, s0 + b0, b1 - b0);
+        if (*p_next != NULL && (*p_next)->start_block == s0 + b0) {
             if (l0 == 0) {
                 s0 = (*p_next)->start_block;
                 file_entry->data.file_data->start_block = s0;
@@ -2087,6 +2102,7 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
             if (*p_blocks == NULL) {
                 return -1;
             }
+            s0 = (*p_blocks)->start_block;
             if (free_list_del(sfs, p_blocks, b1) != 0) {
                 return -1;
             }
@@ -2100,7 +2116,7 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
                 fseek(sfs->file, ((*p_blocks)->start_block + i) * bs, SEEK_SET);
                 fwrite(buf, bs, 1, sfs->file);
             }
-            file_entry->data.file_data->start_block = (*p_blocks)->start_block;
+            file_entry->data.file_data->start_block = s0;
         }
     } else if (b0 > b1) {
         if (free_list_add(sfs, s0 + b0, b0 - b1)) {
