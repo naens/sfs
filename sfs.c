@@ -1081,7 +1081,9 @@ static int write_entry(SFS *sfs, struct sfs_entry *entry)
 }
 
 
-void free_list_delfile_to_normal(struct sfs *sfs, struct sfs_entry *entry)
+// in free list: convert delfile to normal free list item
+// merge with previous / next if needed
+void delfile_to_normal(struct sfs *sfs, struct sfs_entry *entry)
 {
     struct block_list **p_item = &sfs->free_list;
     while (*p_item != NULL) {
@@ -1103,7 +1105,7 @@ static void delete_entries(sfs, from, to)
     struct sfs_entry *entry = from;
     while (entry != to) {
         if (entry->type == SFS_ENTRY_FILE_DEL) {
-            free_list_delfile_to_normal(sfs, entry);
+            delfile_to_normal(sfs, entry);
         }
         struct sfs_entry *tmp = entry;
         entry = entry->next;
