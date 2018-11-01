@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <time.h>
 #include <math.h>
+#include <stdint.h>
 
 #include "sfs.h"
 
@@ -1080,31 +1081,29 @@ static int write_entry(SFS *sfs, struct sfs_entry *entry)
 }
 
 
-struct block_list **find_delfile(pfree_list, delfile)
-    struct block_list **pfree_list;
-    struct sfs_entry *delfile;
+void free_list_delfile_to_normal(struct sfs *sfs, struct sfs_entry *entry)
 {
-    struct block_list **pfree = pfree_list;
-    while (*pfree != NULL && (*pfree)->delfile != delfile) {
-        pfree = &(*pfree)->next;
+    struct block_list **p_item = &sfs->free_list;
+    while (*p_item != NULL) {
+        if ((*p_item)->delfile == entry) {
+            (*p_item)->delfile = NULL;
+            // TODO: merge with previous and next if no gaps
+            return;
+        }
+        p_item = &(*p_item)->next;
     }
-    return pfree;
 }
 
 
-static void delete_entries(pfree_list, from, to)
-    struct block_list **pfree_list;
+static void delete_entries(sfs, from, to)
+    struct sfs *sfs;
     struct sfs_entry *from;
     struct sfs_entry *to;
 {
-    struct block_list **p_free_item = pfree_list;
     struct sfs_entry *entry = from;
     while (entry != to) {
         if (entry->type == SFS_ENTRY_FILE_DEL) {
-            p_free_item = find_delfile(p_free_item, entry); //if not exist => error
-            struct block_list *item_to_delete = *p_free_item;
-            *p_free_item = (*p_free_item)->next;
-            free(item_to_delete);
+            free_list_delfile_to_normal(sfs, entry);
         }
         struct sfs_entry *tmp = entry;
         entry = entry->next;
@@ -1169,7 +1168,7 @@ static int insert_entry(struct sfs *sfs, struct sfs_entry *new_entry)
                 int start = (*pfirst_usable)->offset;
                 int end = start + SFS_ENTRY_SIZE * space_needed;
                 struct sfs_entry *next = (*p_entry)->next;
-                delete_entries(&sfs->free_list, *pfirst_usable, next);
+                delete_entries(sfs, *pfirst_usable, next);
                 new_entry->offset = start;
                 int l = space_found - space_needed;
                 new_entry->next = insert_unused(sfs, end, l, next);
@@ -1980,7 +1979,7 @@ static int free_list_add(SFS *sfs, uint64_t start, uint64_t length)
 
 /****f* sfs/free_list_del
  *  NAME
- *    free_list_del -- delete free block from free list
+ *    free_list_del -- delete free blocks from free list
  *  DESCRIPTION
  *    Deletes free blocks from the free list, so that they can be used.
  *    Several free list entries can be deleted and at most one can be resized,
@@ -2019,7 +2018,7 @@ static int free_list_del(SFS *sfs, struct block_list **p_from, uint64_t length)
         rest -= (*p)->length;
         *p = (*p)->next;
         if (tmp->delfile != NULL) {
-            delete_entries(&sfs->free_list, &tmp->delfile, tmp->delfile->next);
+            delete_entries(&sfs->free_list, tmp->delfile, tmp->delfile->next);
         }
         free(tmp);
     }
