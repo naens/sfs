@@ -1081,18 +1081,74 @@ static int write_entry(SFS *sfs, struct sfs_entry *entry)
 }
 
 
-// in free list: convert delfile to normal free list item
-// merge with previous / next if needed
-void delfile_to_normal(struct sfs *sfs, struct sfs_entry *entry)
+/****f* sfs/delfile_to_normal
+ * NAME
+ *   delfile_to_normal -- find item in free list by entry and make it normal
+ * DESCRIPTION
+ *   Find a delfile item in the free list and make it normal free space.  The
+ *   item can be merged with previous or next item if they are before/after
+ *   without a gap.
+ * PARAMETERS
+ *   SFS - the SFS structure variable
+ *   entry - the delfile entry to convert to normal
+ * RETURN VALUE
+ *   No return value (void funcion)
+ ******
+ * Pseudocode
+ *   find delfile
+ *     curr: item contiaining delfile
+ *     prev: previous item or null (if curr is first)
+ *     next: next item or null (if curr is last)
+ *   if prev <> null and prev:delfile = null
+ *                   and prev:(start+length) = curr:start then
+ *     prev:length += curr:length
+ *     prev:next := curr:next
+ *     tmp := curr
+ *     curr := prev
+ *     free(tmp)
+ *   else
+ *     curr:delfile = null
+ *   end if
+ *   if next <> null and next:delfile = null
+ *                   and curr:(start+length) = next:start then
+ *     curr:length += next:length
+ *     curr:next := next:next
+ *     free(next)
+ *   end if
+ */
+void delfile_to_normal(struct sfs *sfs, struct sfs_entry *delfile)
 {
-    struct block_list **p_item = &sfs->free_list;
-    while (*p_item != NULL) {
-        if ((*p_item)->delfile == entry) {
-            (*p_item)->delfile = NULL;
-            // TODO: merge with previous and next if no gaps
-            return;
-        }
-        p_item = &(*p_item)->next;
+    // find delfile
+    struct block_list *curr = sfs->free_list;
+    struct block_list *prev = NULL;
+    struct block_list *next;
+    while (curr != NULL && curr->delfile != delfile) {
+        prev = curr;
+        curr = curr->next;
+    }
+    if (curr == NULL) {
+        return;
+    }
+    next = curr->next;
+
+    // check before
+    if (prev != NULL && prev->delfile == NULL
+            && prev->start_block + prev->length == curr->start_block) {
+        prev->length += curr->length;
+        prev->next = curr->next;
+        struct block_list *tmp = curr;
+        curr = prev;
+        free(tmp);
+    } else {
+        curr->delfile = NULL;
+    }
+
+    // check after
+    if (next != NULL && next->delfile != NULL
+            && curr->start_block + curr->length == next->start_block) {
+        curr->length += next->length;
+        curr->next = next->next;
+        free(next);
     }
 }
 
@@ -2060,7 +2116,9 @@ static int free_list_del(SFS *sfs, struct block_list **p_from, uint64_t length)
  *     if next <> null then     // enough space right after the file
  *       free_list_del(sfs, p_next, b1 - b0)
  *     else                     // not enough space: find some blocks
+ *       delete the file (add it to free list)
  *       p_blocks = free_list_find(sfs, 0, b1)
+ *       delete from free list
  *       copy the file contents: b0*bs bytes from s0 to start of p_blocks
  *     end if
  *     set file_entry start: s0
@@ -2089,49 +2147,53 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
     const uint64_t l1 = (uint64_t)len;
     const uint64_t b0 = (l0 + bs - 1) / bs;
     const uint64_t b1 = (len + bs - 1) / bs;
-    uint64_t s0 = file_entry->data.file_data->start_block;
+    const uint64_t s0 = file_entry->data.file_data->start_block;
+    uint64_t s1;
     if (b1 > b0) {
         struct block_list **p_next = free_list_find(sfs, s0 + b0, b1 - b0);
         if (*p_next != NULL && (*p_next)->start_block == s0 + b0) {
             if (l0 == 0) {
-                s0 = (*p_next)->start_block;
+                s1 = (*p_next)->start_block;
                 file_entry->data.file_data->start_block = s0;
+            } else {
+                s1 = s0;
             }
             free_list_del(sfs, p_next, b1 - b0);
         } else {
+            if (free_list_add(sfs, s0, b0) != 0) {
+                return -1;
+            }
             struct block_list **p_blocks = free_list_find(sfs, 0, b1);
             if (*p_blocks == NULL) {
                 return -1;
             }
-            s0 = (*p_blocks)->start_block;
+            s1 = (*p_blocks)->start_block;
             if (free_list_del(sfs, p_blocks, b1) != 0) {
-                return -1;
-            }
-            if (free_list_add(sfs, s0, b0) != 0) {
                 return -1;
             }
             for (uint64_t i = 0; i < b0; ++i) {
                 char buf[bs];
-                fseek(sfs->file, (file_entry->data.file_data->file_len + i) * bs, SEEK_SET);
+                fseek(sfs->file, (s0 + i) * bs, SEEK_SET);
                 fread(buf, bs, 1, sfs->file);
-                fseek(sfs->file, ((*p_blocks)->start_block + i) * bs, SEEK_SET);
+                fseek(sfs->file, (s1 + i) * bs, SEEK_SET);
                 fwrite(buf, bs, 1, sfs->file);
             }
-            file_entry->data.file_data->start_block = s0;
+            file_entry->data.file_data->start_block = s1;
         }
     } else if (b0 > b1) {
         if (free_list_add(sfs, s0 + b0, b0 - b1)) {
             return -1;
         }
+        s1 = s0;
     }
     if (l1 > l0) {
         char c[l1-l0];
         memset(c, 0, l1-l0);
-        fseek(sfs->file, s0 * bs + l0, SEEK_SET);
+        fseek(sfs->file, s1 * bs + l0, SEEK_SET);
         fwrite(&c, l1 - l0, 1, sfs->file);
     }
     file_entry->data.file_data->file_len = l1;
-    file_entry->data.file_data->end_block = s0 + (l1 + sfs->block_size - 1) / sfs->block_size - 1;
+    file_entry->data.file_data->end_block = s1 + (l1 + sfs->block_size - 1) / sfs->block_size - 1;
     if (write_entry(sfs, file_entry) != 0) {
         return -1;
     }
