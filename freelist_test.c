@@ -85,9 +85,8 @@ int main(int argc, char **argv)
     test_resize(sfs, 14, "File3", 1);
     test_resize(sfs, 15, "File2", 4);
     test_resize(sfs, 16, "File3", 0);
-    EXIT
-    test_delete(sfs, 17, "File2");
-    test_delete(sfs, 18, "File3");
+    test_delete(sfs, 17, "File3");
+    test_delete(sfs, 18, "File2");
     test_create(sfs, 19, "File5");
     test_resize(sfs, 20, "File5", 5);
     test_delete(sfs, 21, "File5");
