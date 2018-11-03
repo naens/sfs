@@ -426,24 +426,7 @@ static struct sfs_entry *read_entry(SFS *sfs)
 }
 
 
-struct sfs_entry *sfs_read_volume(SFS *sfs)
-{
-    int vol_offset = sfs->block_size * sfs->super->total_blocks - SFS_ENTRY_SIZE;
-    if (fseek(sfs->file, vol_offset, SEEK_SET) != 0) {
-        fprintf(stderr, "fseek error\n");
-        return NULL;
-    }
-
-    struct sfs_entry *volume = read_entry(sfs);
-    if (volume->type != SFS_ENTRY_VOL_ID) {
-        return NULL;
-    }
-
-    return volume;
-}
-
-
-void print_entry(struct sfs *sfs, struct sfs_entry *entry)
+static void print_entry(struct sfs *sfs, struct sfs_entry *entry)
 {
     printf("ENTRY Type: 0x%02x\n", entry->type);
     printf("\tOffset: 0x%06lx\n", entry->offset);
@@ -660,6 +643,7 @@ static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
             } else {
                 pprev = &(*pprev)->next;
             }
+            // TODO: last is delfile case !!!
             if ((*pprev)->next == NULL) {
                 *free_last = *pprev;
             }
