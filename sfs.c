@@ -2007,7 +2007,6 @@ static int free_list_add(SFS *sfs, uint64_t start, uint64_t length)
                 new_item->length = length;
                 new_item->delfile = NULL;
                 new_item->next = item;
-                prev->next = new_item;
                 if (prev != NULL) {
                     prev->next = new_item;
                 } else {
@@ -2181,7 +2180,7 @@ int sfs_resize(SFS *sfs, const char *path, off_t len)
             file_entry->data.file_data->start_block = s1;
         }
     } else if (b0 > b1) {
-        if (free_list_add(sfs, s0 + b0, b0 - b1)) {
+        if (free_list_add(sfs, s0 + b1, b0 - b1)) {
             return -1;
         }
         s1 = s0;

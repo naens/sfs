@@ -16,15 +16,20 @@
 
 int make_size(int count_blocks)
 {
+    if (count_blocks == 0) {
+        return 0;
+    }
     int x = abs(rand());
     return (count_blocks - 1) * BLOCK_SIZE + x % BLOCK_SIZE;
 }
 
+int curr_test;
 void test_create(sfs, test_number, name)
     SFS *sfs;
     int test_number;
     const char *name;
 {
+    curr_test = test_number;
     printf("\n>>>%d. CREATE %s<<<\n", test_number, name);
     if (sfs_create(sfs, name) != 0) {
         ERROR
@@ -37,6 +42,7 @@ void test_resize(sfs, test_number, name, num_blocks)
     const char *name;
     int num_blocks;
 {
+    curr_test = test_number;
     printf("\n>>>%d. RESIZE %s<<<\n", test_number, name);
     int sz = make_size(num_blocks);
     if (sfs_resize(sfs, (const char*) name, sz) != 0) {
@@ -49,6 +55,7 @@ void test_delete(sfs, test_number, name)
     int test_number;
     const char *name;
 {
+    curr_test = test_number;
     printf("\n>>>%d. DELETE %s<<<\n", test_number, name);
     if (sfs_delete(sfs, name) != 0) {
         ERROR
@@ -72,13 +79,13 @@ int main(int argc, char **argv)
     test_resize(sfs, 8, "File2", 2);
     test_resize(sfs, 9, "File3", 5);
     test_resize(sfs, 10, "File2", 3);
-    EXIT
     test_create(sfs, 11, "File4");
     test_resize(sfs, 12, "File4", 2);
     test_resize(sfs, 13, "File4", 1);
     test_resize(sfs, 14, "File3", 1);
     test_resize(sfs, 15, "File2", 4);
     test_resize(sfs, 16, "File3", 0);
+    EXIT
     test_delete(sfs, 17, "File2");
     test_delete(sfs, 18, "File3");
     test_create(sfs, 19, "File5");
