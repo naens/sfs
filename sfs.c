@@ -578,7 +578,62 @@ static void sort_block_list(struct block_list **plist)
     } while (n > 1);
 }
 
-
+/****f* sfs/block_list_to_free_list
+ * NAME
+ *   block_list_to_free_list -- convert a block list to a free list
+ * DESCRIPTION
+ *   Converts the block list, representing the files and their lengths to a
+ *   free list, representing the gaps between the files and the deleted files.
+ *   The items in the block list are ordered by the start_block field of the
+ *   files and unusable areas.  A free list item can be either a gap between
+ *   files (or unusable areas) or deleted files.  No gap entries can follow
+ *   each other, in which case they should be merged.
+ * PARAMETERS
+ *   plist - pointer to pointer to the block list
+ *   first_block - number of the first block of the data area
+ *   total_blocks - number of blocks in the data area (excluding the index area)
+ *   free_last - the pointer to pointer to the last element of the free list
+ * RETURN VALUE
+ *   Does not return anything.
+ ******
+ * Pseudocode
+ *   if the block list is entry then
+ *     use the whole data area as a free list entry
+ *     return
+ *   end if
+ *   if the first entry of the block list is not at first_block then
+ *     create a gap entry between first_block and the first entry
+ *   end if
+ *   the loop: prev, curr, exit:prev=null
+ *     prev_end: prev:(start+length)
+ *     gap: curr:start - prev_end
+ *     if prev is not delfile
+ *       if no gap then
+ *         delete prev
+ *         new prev is its next
+ *       else
+ *         convert prev to gap entry between prev and curr
+ *         new prev is its next
+ *       end if
+ *     else (if prev is delfile)
+ *       if gap > 0 then
+ *         create item for the gap
+ *         new prev is curr
+ *         if curr is null then
+ *           set free_last to the new item
+ *         end if
+ *       else
+ *         new prev is its next
+ *       end if
+ *       if prev is not null and curr is null and prev->delfile is null then
+ *         free_last = prev
+ *       end if
+ *     end if
+ *     if curr is not null then
+ *       curr = curr->next
+ *     end if
+ *   continue loop
+ */
 static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
     struct block_list **plist;
     uint64_t first_block;
@@ -640,11 +695,13 @@ static void block_list_to_free_list(plist, first_block, total_blocks, free_last)
                 item->delfile = NULL;
                 (*pprev)->next = item;
                 pprev = &item->next;
+                if (curr == NULL) {
+                    *free_last = item;
+                }
             } else {
                 pprev = &(*pprev)->next;
             }
-            // TODO: last is delfile case !!!
-            if ((*pprev)->next == NULL) {
+            if (*pprev != NULL && curr == NULL && (*pprev)->delfile == NULL) {
                 *free_last = *pprev;
             }
         }
