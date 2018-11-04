@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="./robodoc.css" type="text/css" />
 <title>./sfs.c</title>
 <!-- Source: ./sfs.c -->
-<!-- Generated with ROBODoc Version 4.99.43 (Mar  7 2018) -->
+<!-- Generated with ROBODoc Version 4.99.43 (Jul 15 2018) -->
 </head>
 <body>
 <div id="logo">
@@ -27,20 +27,22 @@
 <ul>
 <li>1. <a href="#robo0">sfs/sfs</a></li>
 <ul>
-<li>1.1. <a href="#robo7">sfs/sfs</a></li>
+<li>1.1. <a href="#robo9">sfs/sfs</a></li>
 <ul>
 <li>1.1.1. <a href="./sfs_fuse_c.html#robo1">sfs/sfs_fuse</a></li>
-<li>1.1.2. <a href="#robo2">sfs/delete_entry</a></li>
-<li>1.1.3. <a href="#robo3">sfs/free_list_add</a></li>
-<li>1.1.4. <a href="#robo4">sfs/free_list_del</a></li>
-<li>1.1.5. <a href="#robo5">sfs/free_list_find</a></li>
-<li>1.1.6. <a href="#robo6">sfs/rename_entry</a></li>
-<li>1.1.7. <a href="#robo8">sfs/sfs_delete</a></li>
-<li>1.1.8. <a href="#robo9">sfs/sfs_rename</a></li>
-<li>1.1.9. <a href="#robo10">sfs/sfs_resize</a></li>
-<li>1.1.10. <a href="#robo11">sfs/sfs_rmdir</a></li>
-<li>1.1.11. <a href="#robo12">sfs/sfs_super</a></li>
-<li>1.1.12. <a href="#robo13">sfs/sfs_write</a></li>
+<li>1.1.2. <a href="#robo2">sfs/block_list_to_free_list</a></li>
+<li>1.1.3. <a href="#robo3">sfs/delete_entry</a></li>
+<li>1.1.4. <a href="#robo4">sfs/delfile_to_normal</a></li>
+<li>1.1.5. <a href="#robo5">sfs/free_list_add</a></li>
+<li>1.1.6. <a href="#robo6">sfs/free_list_del</a></li>
+<li>1.1.7. <a href="#robo7">sfs/free_list_find</a></li>
+<li>1.1.8. <a href="#robo8">sfs/rename_entry</a></li>
+<li>1.1.9. <a href="#robo10">sfs/sfs_delete</a></li>
+<li>1.1.10. <a href="#robo11">sfs/sfs_rename</a></li>
+<li>1.1.11. <a href="#robo12">sfs/sfs_resize</a></li>
+<li>1.1.12. <a href="#robo13">sfs/sfs_rmdir</a></li>
+<li>1.1.13. <a href="#robo14">sfs/sfs_super</a></li>
+<li>1.1.14. <a href="#robo15">sfs/sfs_write</a></li>
 </ul>
 </ul>
 </ul>
@@ -57,10 +59,36 @@
 </pre>
 
 <hr />
-<a name="sfs2fdelete5fentry"></a>
-<a name="robo2"></a><h2>sfs/delete_entry [ Functions ]</h2>
+<a name="sfs2fblock5flist5fto5ffree5flist"></a>
+<a name="robo2"></a><h2>sfs/block_list_to_free_list [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p class="item_name">NAME</p>
+<pre>   <strong>block_list_to_free_list</strong> -- convert a block list to a free list
+</pre>
+<p class="item_name">DESCRIPTION</p>
+<pre>   Converts the block list, representing the files and their lengths to a
+   free list, representing the gaps between the files and the deleted files.
+   The items in the block list are ordered by the start_block field of the
+   files and unusable areas.  A free list item can be either a gap between
+   files (or unusable areas) or deleted files.  No gap entries can follow
+   each other, in which case they should be merged.
+</pre>
+<p class="item_name">PARAMETERS</p>
+<pre>   plist - pointer to pointer to the block list
+   first_block - number of the first block of the data area
+   total_blocks - number of blocks in the data area (excluding the index area)
+   free_last - the pointer to pointer to the last element of the free list
+</pre>
+<p class="item_name">RETURN VALUE</p>
+<pre>   Does not return anything.
+</pre>
+
+<hr />
+<a name="sfs2fdelete5fentry"></a>
+<a name="robo3"></a><h2>sfs/delete_entry [ Functions ]</h2>
+
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   <strong>delete_entry</strong> -- delete entry from the entry list and free it
 </pre>
@@ -79,10 +107,31 @@
 </pre>
 
 <hr />
-<a name="sfs2ffree5flist5fadd"></a>
-<a name="robo3"></a><h2>sfs/free_list_add [ Functions ]</h2>
+<a name="sfs2fdelfile5fto5fnormal"></a>
+<a name="robo4"></a><h2>sfs/delfile_to_normal [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p class="item_name">NAME</p>
+<pre>   <strong>delfile_to_normal</strong> -- find item in free list by entry and make it normal
+</pre>
+<p class="item_name">DESCRIPTION</p>
+<pre>   Find a delfile item in the free list and make it normal free space.  The
+   item can be merged with previous or next item if they are before/after
+   without a gap.
+</pre>
+<p class="item_name">PARAMETERS</p>
+<pre>   SFS - the SFS structure variable
+   entry - the delfile entry to convert to normal
+</pre>
+<p class="item_name">RETURN VALUE</p>
+<pre>   No return value (void funcion)
+</pre>
+
+<hr />
+<a name="sfs2ffree5flist5fadd"></a>
+<a name="robo5"></a><h2>sfs/free_list_add [ Functions ]</h2>
+
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>    <strong>free_list_add</strong> -- add free block to the free list
 </pre>
@@ -102,11 +151,11 @@
 
 <hr />
 <a name="sfs2ffree5flist5fdel"></a>
-<a name="robo4"></a><h2>sfs/free_list_del [ Functions ]</h2>
+<a name="robo6"></a><h2>sfs/free_list_del [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
-<pre>    <strong>free_list_del</strong> -- delete free block from free list
+<pre>    <strong>free_list_del</strong> -- delete free blocks from free list
 </pre>
 <p class="item_name">DESCRIPTION</p>
 <pre>    Deletes free blocks from the free list, so that they can be used.
@@ -126,9 +175,9 @@
 
 <hr />
 <a name="sfs2ffree5flist5ffind"></a>
-<a name="robo5"></a><h2>sfs/free_list_find [ Functions ]</h2>
+<a name="robo7"></a><h2>sfs/free_list_find [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>    <strong>free_list_find</strong> -- find consecutive free block in the free list
 </pre>
@@ -137,7 +186,7 @@
 </pre>
 <p class="item_name">PARAMETERS</p>
 <pre>    SFS - the SFS structure variable
-    sfart_block - the minimum block number for the consecutive blocks
+    start_block - the minimum block number for the consecutive blocks
     length - minimum length of the consecutive blocks
 </pre>
 <p class="item_name">RETURN VALUE</p>
@@ -146,9 +195,9 @@
 
 <hr />
 <a name="sfs2frename5fentry"></a>
-<a name="robo6"></a><h2>sfs/rename_entry [ Functions ]</h2>
+<a name="robo8"></a><h2>sfs/rename_entry [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   <strong>rename_entry</strong> -- rename the entry by deleting the old and inserting the new
 </pre>
@@ -164,7 +213,7 @@
 
 <hr />
 <a name="sfs2fsfs"></a>
-<a name="robo7"></a><h2>sfs/sfs [ Structures ]</h2>
+<a name="robo9"></a><h2>sfs/sfs [ Structures ]</h2>
 
 <p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo0">sfs</a> ] [ <a href="./robo_strutures.html#robo_top_of_doc">Structures</a> ]</p>
 <p class="item_name">NAME</p>
@@ -198,15 +247,15 @@
 
 <hr />
 <a name="sfs2fsfs5fdelete"></a>
-<a name="robo8"></a><h2>sfs/sfs_delete [ Functions ]</h2>
+<a name="robo10"></a><h2>sfs/sfs_delete [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   <strong>sfs_delete</strong> -- delete a file form the file system
 </pre>
 <p class="item_name">DESCRIPTION</p>
 <pre>   Delete a file from the file system.  Can be used only for files, for
-   directories <a href="#robo11">sfs_rmdir</a> can be used.
+   directories <a href="#robo13">sfs_rmdir</a> can be used.
 </pre>
 <p class="item_name">PARAMETERS</p>
 <pre>   SFS - the SFS structure variable
@@ -218,9 +267,9 @@
 
 <hr />
 <a name="sfs2fsfs5frename"></a>
-<a name="robo9"></a><h2>sfs/sfs_rename [ Functions ]</h2>
+<a name="robo11"></a><h2>sfs/sfs_rename [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   <strong>sfs_rename</strong> -- rename the file or directory (or move)
 </pre>
@@ -240,9 +289,9 @@
 
 <hr />
 <a name="sfs2fsfs5fresize"></a>
-<a name="robo10"></a><h2>sfs/sfs_resize [ Functions ]</h2>
+<a name="robo12"></a><h2>sfs/sfs_resize [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   <strong>sfs_resize</strong> -- resize a file
 </pre>
@@ -261,9 +310,9 @@
 
 <hr />
 <a name="sfs2fsfs5frmdir"></a>
-<a name="robo11"></a><h2>sfs/sfs_rmdir [ Functions ]</h2>
+<a name="robo13"></a><h2>sfs/sfs_rmdir [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   <strong>sfs_rmdir</strong> -- delete an empty directory
 </pre>
@@ -281,9 +330,9 @@
 
 <hr />
 <a name="sfs2fsfs5fsuper"></a>
-<a name="robo12"></a><h2>sfs/sfs_super [ Structures ]</h2>
+<a name="robo14"></a><h2>sfs/sfs_super [ Structures ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_strutures.html#robo_top_of_doc">Structures</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_strutures.html#robo_top_of_doc">Structures</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   struct <strong>sfs_super</strong> -- structure for the superblock of the file system
 </pre>
@@ -304,15 +353,15 @@
 
 <hr />
 <a name="sfs2fsfs5fwrite"></a>
-<a name="robo13"></a><h2>sfs/sfs_write [ Functions ]</h2>
+<a name="robo15"></a><h2>sfs/sfs_write [ Functions ]</h2>
 
-<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo7">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
+<p>[ <a href="#robo_top_of_doc">Top</a> ] [ <a href="#robo9">sfs</a> ] [ <a href="./robo_functions.html#robo_top_of_doc">Functions</a> ]</p>
 <p class="item_name">NAME</p>
 <pre>   <strong>sfs_write</strong> -- write to file from buffer at an offset
 </pre>
 <p class="item_name">DESCRIPTION</p>
 <pre>   Write a specified amount of bytes from buffer to file at a specified offset.
-   If there is not enough space, the file size is not increased (<a href="#robo10">sfs_resize</a>
+   If there is not enough space, the file size is not increased (<a href="#robo12">sfs_resize</a>
    must be called in such case).  The offset must not be further than the end
    of the file.  If the sum of size and the offset is greater than the tota
    size of the file, bytes are written only until the end of the file.
@@ -330,7 +379,7 @@
 
 </div> <!-- content -->
 <div id="footer">
-<p>Generated from ./sfs.c with <a href="http://www.xs4all.nl/~rfsber/Robo/robodoc.html">ROBODoc</a> V4.99.43 on Mon Oct 29 2018 15:19:16
+<p>Generated from ./sfs.c with <a href="http://www.xs4all.nl/~rfsber/Robo/robodoc.html">ROBODoc</a> V4.99.43 on Sun Nov 04 2018 12:07:40
 </p>
 </div> <!-- footer -->
 </body>

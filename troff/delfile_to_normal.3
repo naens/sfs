@@ -1,0 +1,19 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Jul 15 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH delfile_to_normal 3 "Nov 04, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBdelfile_to_normal\fR \-\- find item in free list by entry and make it normal
+
+.SH DESCRIPTION
+Find a delfile item in the free list and make it normal free space\.  The
+item can be merged with previous or next item if they are before/after
+without a gap\.
+
+.SH PARAMETERS
+SFS \- the SFS structure variable
+entry \- the delfile entry to convert to normal
+
+.SH RETURN VALUE
+No return value (void funcion)

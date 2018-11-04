@@ -1,0 +1,24 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Jul 15 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH block_list_to_free_list 3 "Nov 04, 2018" sfs "sfs Reference"
+
+.SH NAME
+\fBblock_list_to_free_list\fR \-\- convert a block list to a free list
+
+.SH DESCRIPTION
+Converts the block list, representing the files and their lengths to a
+free list, representing the gaps between the files and the deleted files\.
+The items in the block list are ordered by the start_block field of the
+files and unusable areas\.  A free list item can be either a gap between
+files (or unusable areas) or deleted files\.  No gap entries can follow
+each other, in which case they should be merged\.
+
+.SH PARAMETERS
+plist \- pointer to pointer to the block list
+first_block \- number of the first block of the data area
+total_blocks \- number of blocks in the data area (excluding the index area)
+free_last \- the pointer to pointer to the last element of the free list
+
+.SH RETURN VALUE
+Does not return anything\.
