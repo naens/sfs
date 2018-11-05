@@ -1,0 +1,16 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Jul 15 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH dir_data 3 "Nov 05, 2018" sfs "sfs Reference"
+
+.SH NAME
+struct \fBdir_data\fR \-\- directory entry in the Index Area
+
+.SH DESCRIPTION
+Corresponds to the directory and deleted directory entries in the Index
+Area\.
+
+.SH FIELDS
+num_cont \- number of continuations used by the entry
+time_stamp \- time\-date of creation/modification of the directory
+char \- absolute path, with directory names separated by '/'

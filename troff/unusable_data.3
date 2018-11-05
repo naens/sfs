@@ -1,0 +1,17 @@
+.\" Source: ./sfs.c
+.\" Generated with ROBODoc Version 4\.99\.43 (Jul 15 2018)
+.\" ROBODoc (c) 1994\-2015 by Frans Slothouber and many others\.
+.TH unusable_data 3 "Nov 05, 2018" sfs "sfs Reference"
+
+.SH NAME
+struct \fBunusable_data\fR \-\- unusable entry in the Index Area
+
+.SH DESCRIPTION
+Describes the unusable blocks in the Data and Free Areas\.  If some blocks
+are unusable in the Index Area or the Superblock, such cases are not
+implemented and the volume cannot be used (unless it's possible to move
+the Index Area outside of the unusable blocks\.
+
+.SH FIELDS
+start_block \- first unusable block
+end_block \- last unusable block
