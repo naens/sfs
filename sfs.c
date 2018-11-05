@@ -133,14 +133,33 @@ struct sfs {
 };
 
 
-/* The Volume ID Entry Data */
+/****s* sfs/volume_data
+ * NAME
+ *   struct volume_data -- information in the volume ID entry
+ * DESCRIPTION
+ *   The last entry of the Index Area.
+ * FIELDS
+ *   time_stamp - time-date of creation of the filesystem
+ *   name - name of the volume
+ ******
+ */
 struct volume_data {
     int64_t time_stamp;
     char *name;
 };
 
-
-/* The Directory Entry Data */
+/****s* sfs/dir_data
+ * NAME
+ *   struct dir_data -- directory entry in the Index Area
+ * DESCRIPTION
+ *   Corresponds to the directory and deleted directory entries in the Index
+ *   Area.
+ * FIELDS
+ *   num_cont - number of continuations used by the entry
+ *   time_stamp - time-date of creation/modification of the directory
+ *   char - absolute path, with directory names separated by '/'
+ ******
+ */
 struct dir_data {
     uint8_t num_cont;
     int64_t time_stamp;
@@ -148,7 +167,21 @@ struct dir_data {
 };
 
 
-/* The File Entry Data */
+/****s* sfs/file_data
+ * NAME
+ *   struct file_data -- file entry in the Index Area
+ * DESCRIPTION
+ *   Corresponds to the file and deleted file entries in the Index
+ *   Area.  The blocks used by the file must follow each other.
+ * FIELDS
+ *   num_cont - number of continuations used by the entry
+ *   time_stamp - time-date of creation/modification of the file
+ *   start_block - first block used by the file
+ *   end_block - last block used by the file
+ *   file_len - the size of the file in bytes
+ *   char - absolute path, with directory names separated by '/'
+ ******
+ */
 struct file_data {
     uint8_t num_cont;
     int64_t time_stamp;
@@ -159,7 +192,19 @@ struct file_data {
 };
 
 
-/* The Unusable Entry Data */
+/****s* sfs/unusable_data
+ * NAME
+ *   struct unusable_data -- unusable entry in the Index Area
+ * DESCRIPTION
+ *   Describes the unusable blocks in the Data and Free Areas.  If some blocks
+ *   are unusable in the Index Area or the Superblock, such cases are not
+ *   implemented and the volume cannot be used (unless it's possible to move
+ *   the Index Area outside of the unusable blocks.
+ * FIELDS
+ *   start_block - first unusable block
+ *   end_block - last unusable block
+ ******
+ */
 struct unusable_data {
     uint64_t start_block;
     uint64_t end_block;
