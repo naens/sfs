@@ -10,6 +10,6 @@
 *.creator.user
 DEADJOE
 vgcore*
-test
+tests
 bk
 *~
